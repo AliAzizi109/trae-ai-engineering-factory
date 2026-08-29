@@ -64,3 +64,25 @@ Standards:
 - Wrap executable code in `if __name__ == "__main__":`.
 - Do not deploy, do not touch files outside the requested scope.
 - After fixing, summarize what changed in 3 bullets or fewer.
+
+---
+
+## Session Models (V1.0)
+
+افتح جلسة كل دور بالنموذج المحدد عبر قائمة النموذج (بديل Auto):
+
+- Orchestrator / Planner: GPT-5.4
+- Coder: Kimi-K2.5
+- CodeReviewer / Security: Gemini-3.1-Pro-Preview
+- QA / Tests: GPT-5.2
+- Research / Docs: Gemini-3-Flash-Preview
+- مهام روتينية خفيفة: Seed-2.1-Turbo
+
+---
+
+## Sync Discipline (V1.0)
+
+- START of any work session: run `git pull` before making changes.
+- END of any completed task: run `git add .` and `git commit -m "<short summary>"`.
+- Code changes: push to a branch and open a PR; the human merges.
+- Docs/trivial changes only: push to main is allowed.
