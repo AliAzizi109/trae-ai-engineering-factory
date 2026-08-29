@@ -43,12 +43,22 @@ function Get-BaselineRelativePaths {
 
     return @(
         'AGENTS.md'
+        '.trae/agents/factory-reviewer.md'
+        '.trae/agents/security-reviewer.md'
+        '.trae/agents/qa-verifier.md'
         '.trae/rules/00-constitution.md'
         '.trae/agent-specs.md'
         '.trae/current-project-state.md'
+        '.trae/factory/factory-system.md'
+        '.trae/factory/verification-matrix.md'
+        '.trae/factory/tasks/README.md'
+        '.trae/factory/templates/task.md'
         '.trae/mcp.json'
         '.gitignore'
         'scripts/bootstrap-project-fs.ps1'
+        'scripts/initialize-factory-project.ps1'
+        'scripts/new-factory-task.ps1'
+        'scripts/update-factory-task.ps1'
         '.trae-local/mcp/project-fs/package.json'
         '.trae-local/mcp/project-fs/package-lock.json'
     )
@@ -137,7 +147,9 @@ function Main {
     Write-Host 'Factory bootstrap completed successfully.'
     Write-Host 'Next steps:'
     Write-Host '1. Review git status.'
-    Write-Host '2. Commit/push the baseline or publish the template when ready.'
+    Write-Host '2. Create a task record with scripts/new-factory-task.ps1 when you need persistent task state.'
+    Write-Host '3. Resume or checkpoint that task with scripts/update-factory-task.ps1 as work progresses.'
+    Write-Host '4. Commit/push the baseline or publish the template when ready.'
 }
 
 try {
