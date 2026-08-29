@@ -30,6 +30,8 @@ Last updated: 2026-08-29
 - `test_poc/test_calc.py` was extended with additional validation-path tests, including `TypeError` and `NaN` coverage.
 - The project now has a single bootstrap entrypoint that validates the baseline and then runs the project-fs setup.
 - The baseline now supports initializing a new repository identity through `scripts/initialize-factory-project.ps1`.
+- The initializer behavior was generalized so README updates apply only while a repository still uses the baseline identity header; adopted repositories can keep a project-specific README without being reshaped on every run.
+- The baseline docs portability rule is now explicit: active operating documents should use repository-relative links, while historical `file:///` links are fixed only when a document becomes an active entrypoint again.
 
 ## Current Task And Scope
 
@@ -40,6 +42,8 @@ Current scope:
 - Keep the factory behavior inside the repository rather than inside one device.
 - Make the setup reproducible across multiple devices with GitHub plus a single bootstrap step.
 - Continue reducing manual setup and manual orchestration while preserving review and approval gates.
+- Keep the reusable initializer adoption-safe across project-specific repositories instead of assuming every repo keeps the baseline README shape.
+- Keep active operating documentation portable across machines by preferring repository-relative links.
 
 Primary files in the current scope:
 
@@ -132,7 +136,8 @@ Items that should remain local to a machine or session:
 - `Coder` was confirmed to use MCP for reading, but it still preferred built-in editing for writing. This is not a blocking issue, but it remains an observed behavior.
 - The current bootstrap is Windows-first because it explicitly uses `npm.cmd`.
 - The next adoption still needs to be validated on another repository, not only inside this baseline repository itself.
+- Some historical or archive documents may still contain older machine-specific `file:///` links; those should be updated only when the document becomes an active operating reference again.
 
 ## Next Recommended Step
 
-Use this baseline in a first real project adoption on another repository and validate the initializer-driven setup flow there.
+Use this baseline in a first real project adoption on another repository and validate the generalized initializer flow plus the docs portability rule there.

@@ -47,7 +47,7 @@ The following tracked files define the reusable factory baseline:
 - `.trae/mcp.json`: project-scoped MCP configuration that points the filesystem server at the current workspace.
 - `scripts/bootstrap-factory.ps1`: the main entrypoint; validates the baseline and then bootstraps local MCP dependencies.
 - `scripts/bootstrap-project-fs.ps1`: installs the local project-fs MCP dependencies deterministically with `npm ci`.
-- `scripts/initialize-factory-project.ps1`: applies the initial project identity to a repository created from this baseline.
+- `scripts/initialize-factory-project.ps1`: applies the initial project identity to a repository created from this baseline and skips README reshaping when a repo already uses a project-specific identity header.
 - `.trae-local/mcp/project-fs/package.json` and `package-lock.json`: tracked dependency manifests required to recreate the local MCP install.
 - `.gitignore`: excludes machine-local files and install outputs from Git.
 
@@ -116,6 +116,12 @@ To preview the planned identity updates without modifying any files:
 powershell -ExecutionPolicy Bypass -File .\scripts\initialize-factory-project.ps1 -ProjectName "My Project" -ProjectSummary "Short summary" -CheckOnly
 ```
 
+Initializer behavior notes:
+
+- The initializer updates `README.md` only when the repository still uses the baseline identity-header structure from this baseline.
+- An adopted repository may keep its own project-specific `README.md`; in that case the initializer skips the README change instead of reshaping it on every run.
+- `.trae/current-project-state.md` still receives the current project identity so the tracked factory state stays aligned with the repository adoption.
+
 ## Important Commands
 
 ```powershell
@@ -147,6 +153,12 @@ Shows tracked, modified, and untracked files before sync, staging, or review.
 python -m pytest .\test_poc\test_calc.py
 ```
 Runs the small Python proof-of-concept test, if Python and `pytest` are available.
+
+## Docs Portability
+
+- Active, day-to-day operating documents should use repository-relative links instead of machine-specific `file:///` paths.
+- Historical or archive documents that still contain old `file:///` links should not be mass-rewritten automatically.
+- Fix an old machine-specific link when that document becomes an active entrypoint or a daily operating reference again.
 
 ## Daily Workflow
 

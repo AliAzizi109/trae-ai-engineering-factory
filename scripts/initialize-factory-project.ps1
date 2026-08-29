@@ -129,6 +129,33 @@ function Split-Lines {
     return $Content -split '\r?\n', -1
 }
 
+function Test-ReadmeSupportsFactoryIdentityUpdate {
+    <#
+    .SYNOPSIS
+    Returns true only when README still uses the baseline identity-header shape.
+    #>
+    [OutputType([bool])]
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$Content
+    )
+
+    $lines = Split-Lines -Content $Content
+    if ($lines.Count -lt 2) {
+        return $false
+    }
+
+    if ($lines[1] -match '^> Project summary:') {
+        return $true
+    }
+
+    if ($lines.Count -gt 2 -and [string]::IsNullOrWhiteSpace($lines[1]) -and $lines[2] -match '^> Project summary:') {
+        return $true
+    }
+
+    return $false
+}
+
 function Get-UpdatedReadmeContent {
     <#
     .SYNOPSIS
@@ -372,15 +399,22 @@ function Invoke-Initialization {
     $readmeContent = Get-Content -LiteralPath $readmePath -Raw
     $projectStateContent = Get-Content -LiteralPath $projectStatePath -Raw
 
-    $updatedReadmeContent = Get-UpdatedReadmeContent -Content $readmeContent -ProjectName $ProjectName -ProjectSummary $ProjectSummary
     $updatedProjectStateContent = Get-UpdatedProjectStateContent -Content $projectStateContent -ProjectName $ProjectName -ProjectSummary $ProjectSummary
-
-    $readmeChanged = (Get-NormalizedComparableText -Content $updatedReadmeContent) -cne (Get-NormalizedComparableText -Content $readmeContent)
+    $readmeSupportsIdentityUpdate = Test-ReadmeSupportsFactoryIdentityUpdate -Content $readmeContent
+    $updatedReadmeContent = $readmeContent
+    $readmeChanged = $false
+    if ($readmeSupportsIdentityUpdate) {
+        $updatedReadmeContent = Get-UpdatedReadmeContent -Content $readmeContent -ProjectName $ProjectName -ProjectSummary $ProjectSummary
+        $readmeChanged = (Get-NormalizedComparableText -Content $updatedReadmeContent) -cne (Get-NormalizedComparableText -Content $readmeContent)
+    }
     $projectStateChanged = (Get-NormalizedComparableText -Content $updatedProjectStateContent) -cne (Get-NormalizedComparableText -Content $projectStateContent)
 
     if ($IsCheckOnly) {
         Write-Host 'Check-only mode: no files will be modified.'
-        if ($readmeChanged) {
+        if (-not $readmeSupportsIdentityUpdate) {
+            Write-Host 'README.md uses a project-specific structure; skipping README identity update.'
+        }
+        elseif ($readmeChanged) {
             Write-Host "Would update README.md with project title '$ProjectName' and summary '$ProjectSummary'."
         }
         else {
@@ -397,7 +431,7 @@ function Invoke-Initialization {
         return
     }
 
-    if ($readmeChanged) {
+    if ($readmeSupportsIdentityUpdate -and $readmeChanged) {
         Write-Utf8File -Path $readmePath -Content $updatedReadmeContent
     }
 
@@ -406,7 +440,12 @@ function Invoke-Initialization {
     }
 
     Write-Host 'Project initialization completed successfully.'
-    Write-Host "README.md updated: $readmeChanged"
+    if (-not $readmeSupportsIdentityUpdate) {
+        Write-Host 'README.md updated: skipped (project-specific README structure)'
+    }
+    else {
+        Write-Host "README.md updated: $readmeChanged"
+    }
     Write-Host ".trae/current-project-state.md updated: $projectStateChanged"
 }
 
