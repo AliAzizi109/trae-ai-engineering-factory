@@ -1,0 +1,7 @@
+.trae-local/mcp/project-fs/node_modules/
+.trae-local/mcp/project-fs/npm-debug.log*
+
+# Local session/debug artifacts
+/chat-*.txt
+/debug-mcp-routing-error.md
+.dbg/

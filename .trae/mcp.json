@@ -1,0 +1,11 @@
+{
+  "mcpServers": {
+    "project-fs": {
+      "command": "node",
+      "args": [
+        "${workspaceFolder}/.trae-local/mcp/project-fs/node_modules/@modelcontextprotocol/server-filesystem/dist/index.js",
+        "${workspaceFolder}"
+      ]
+    }
+  }
+}

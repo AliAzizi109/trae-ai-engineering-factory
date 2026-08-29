@@ -1,0 +1,8 @@
+{
+  "name": "project-fs-mcp",
+  "private": true,
+  "dependencies": {
+    "@modelcontextprotocol/server-filesystem": "2026.7.10",
+    "zod": "4.5.2"
+  }
+}

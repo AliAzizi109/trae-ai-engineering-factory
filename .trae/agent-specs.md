@@ -1,7 +1,8 @@
 # Agent Specs — Factory V1.0
 
 أنشئ كل وكيل عبر: Agent → Create → Manual Setup
-انسخ الحقول حرفياً. فعّل "Callable by other agents" لكليهما.
+انسخ الحقول حرفياً. فعّل "Callable by other agents" عندما تكون الميزة
+متاحة في SOLO.
 
 ---
 
@@ -82,7 +83,11 @@ Standards:
 
 ## Sync Discipline (V1.0)
 
-- START of any work session: run `git pull` before making changes.
-- END of any completed task: run `git add .` and `git commit -m "<short summary>"`.
-- Code changes: push to a branch and open a PR; the human merges.
-- Docs/trivial changes only: push to main is allowed.
+- Sync with remote before work when it is safe and relevant to the current
+  branch.
+- Do not create commits unless the human explicitly asks for a commit.
+- Do not use `git add .` or `git add -A` by default; stage only the intended
+  files.
+- Do not push, merge, or deploy without explicit human approval.
+- Prefer a feature branch and PR flow for code changes; the human decides when
+  to merge.
