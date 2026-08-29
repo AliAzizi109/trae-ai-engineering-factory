@@ -2,6 +2,11 @@
 
 Last updated: 2026-08-29
 
+## Project Identity
+
+- Name: Trae Factory Test
+- Summary: Reusable Trae-based factory baseline for initializing new repositories with less manual setup.
+
 ## Completed Tasks
 
 - The project direction for V1.0 was settled on Trae Ultra as the main platform, instead of relying on Prime Agent or bb as the primary execution environment.
@@ -21,8 +26,10 @@ Last updated: 2026-08-29
   - `.trae-local/mcp/project-fs/package.json`
   - `.trae-local/mcp/project-fs/package-lock.json`
 - The multi-device baseline was independently reviewed. The first review failed on determinism and path stability, those issues were fixed, and the re-review passed.
+- The baseline commit was finalized and pushed to GitHub for reuse across devices.
 - `test_poc/test_calc.py` was extended with additional validation-path tests, including `TypeError` and `NaN` coverage.
 - The project now has a single bootstrap entrypoint that validates the baseline and then runs the project-fs setup.
+- The baseline now supports initializing a new repository identity through `scripts/initialize-factory-project.ps1`.
 
 ## Current Task And Scope
 
@@ -42,6 +49,7 @@ Primary files in the current scope:
 - `.trae/mcp.json`
 - `scripts/bootstrap-factory.ps1`
 - `scripts/bootstrap-project-fs.ps1`
+- `scripts/initialize-factory-project.ps1`
 - `.trae-local/mcp/project-fs/package.json`
 - `.trae-local/mcp/project-fs/package-lock.json`
 - `.gitignore`
@@ -57,6 +65,7 @@ Files that should travel through GitHub across devices:
 - `.trae/mcp.json`
 - `scripts/bootstrap-factory.ps1`
 - `scripts/bootstrap-project-fs.ps1`
+- `scripts/initialize-factory-project.ps1`
 - `.gitignore`
 - `.trae-local/mcp/project-fs/package.json`
 - `.trae-local/mcp/project-fs/package-lock.json`
@@ -72,6 +81,7 @@ The current baseline commit set should include:
 - `.trae/mcp.json`
 - `scripts/bootstrap-factory.ps1`
 - `scripts/bootstrap-project-fs.ps1`
+- `scripts/initialize-factory-project.ps1`
 - `.gitignore`
 - `.trae-local/mcp/project-fs/package.json`
 - `.trae-local/mcp/project-fs/package-lock.json`
@@ -118,15 +128,11 @@ Items that should remain local to a machine or session:
 
 ## Open Problems And Unresolved Items
 
-- The updated multi-device baseline exists locally but has not yet been finalized into a clean Git commit and pushed in its current form.
 - `pytest` is not installed in the current environment, so local execution-based verification is incomplete.
 - `Coder` was confirmed to use MCP for reading, but it still preferred built-in editing for writing. This is not a blocking issue, but it remains an observed behavior.
 - The current bootstrap is Windows-first because it explicitly uses `npm.cmd`.
-- The working tree still contains multiple local changes and untracked files that need to be classified before a clean baseline commit.
+- The next adoption still needs to be validated on another repository, not only inside this baseline repository itself.
 
 ## Next Recommended Step
 
-Finalize the baseline for reuse by either:
-
-- creating the clean baseline commit and pushing it
-- confirming template-publishing readiness
+Use this baseline in a first real project adoption on another repository and validate the initializer-driven setup flow there.

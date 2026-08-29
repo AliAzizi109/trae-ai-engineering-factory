@@ -1,4 +1,5 @@
 # Trae Factory Test
+> Project summary: Reusable Trae-based factory baseline for initializing new repositories with less manual setup.
 
 ## What This Repository Is
 
@@ -15,23 +16,24 @@ This repository is a small, reusable baseline for running an AI engineering fact
 
 ```text
 .
-├─ AGENTS.md
-├─ .trae/
-│  ├─ agent-specs.md
-│  ├─ current-project-state.md
-│  ├─ mcp.json
-│  └─ rules/
-│     └─ 00-constitution.md
-├─ .trae-local/
-│  └─ mcp/
-│     └─ project-fs/
-│        ├─ package.json
-│        └─ package-lock.json
-├─ scripts/
-│  ├─ bootstrap-factory.ps1
-│  └─ bootstrap-project-fs.ps1
-└─ test_poc/
-   └─ test_calc.py
+|- AGENTS.md
+|- .trae/
+|  |- agent-specs.md
+|  |- current-project-state.md
+|  |- mcp.json
+|  `- rules/
+|     `- 00-constitution.md
+|- .trae-local/
+|  `- mcp/
+|     `- project-fs/
+|        |- package.json
+|        `- package-lock.json
+|- scripts/
+|  |- bootstrap-factory.ps1
+|  |- bootstrap-project-fs.ps1
+|  `- initialize-factory-project.ps1
+`- test_poc/
+   `- test_calc.py
 ```
 
 ## Factory Baseline Files
@@ -45,6 +47,7 @@ The following tracked files define the reusable factory baseline:
 - `.trae/mcp.json`: project-scoped MCP configuration that points the filesystem server at the current workspace.
 - `scripts/bootstrap-factory.ps1`: the main entrypoint; validates the baseline and then bootstraps local MCP dependencies.
 - `scripts/bootstrap-project-fs.ps1`: installs the local project-fs MCP dependencies deterministically with `npm ci`.
+- `scripts/initialize-factory-project.ps1`: applies the initial project identity to a repository created from this baseline.
 - `.trae-local/mcp/project-fs/package.json` and `package-lock.json`: tracked dependency manifests required to recreate the local MCP install.
 - `.gitignore`: excludes machine-local files and install outputs from Git.
 
@@ -99,6 +102,20 @@ Note: if Trae's local toolhost prints extra PowerShell execution-policy noise
 after the success lines above, treat the bootstrap as successful as long as the
 explicit factory success messages were printed.
 
+## Starting a New Project From This Baseline
+
+This repository can also be used as a reusable factory baseline for a new project. After cloning or creating a new repository from this baseline, run the initializer before starting the actual project work:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\initialize-factory-project.ps1 -ProjectName "My Project" -ProjectSummary "Short summary"
+```
+
+To preview the planned identity updates without modifying any files:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\initialize-factory-project.ps1 -ProjectName "My Project" -ProjectSummary "Short summary" -CheckOnly
+```
+
 ## Important Commands
 
 ```powershell
@@ -115,6 +132,11 @@ Checks whether the repository contains the required tracked baseline files witho
 powershell -ExecutionPolicy Bypass -File .\scripts\bootstrap-project-fs.ps1
 ```
 Reinstalls only the local project-fs MCP dependencies from the tracked lockfile.
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\initialize-factory-project.ps1 -ProjectName "My Project" -ProjectSummary "Short summary"
+```
+Applies the initial repository identity to `README.md` and `.trae/current-project-state.md` for a new project created from this baseline.
 
 ```powershell
 git status
