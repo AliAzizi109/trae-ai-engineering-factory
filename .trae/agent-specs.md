@@ -1,8 +1,82 @@
-# Agent Specs — Factory V1.0
+# Agent Specs — Factory V2.0
 
 أنشئ كل وكيل عبر: Agent → Create → Manual Setup
 انسخ الحقول حرفياً. فعّل "Callable by other agents" عندما تكون الميزة
 متاحة في SOLO.
+
+## Preference Order
+
+- فضّل الوكلاء المحليين داخل المشروع تحت `.trae/agents/` عندما يدعم Trae
+  هذا السلوك داخل المستودع وعندما تكون ميزة Subagents Directory مفعّلة.
+- استخدم المواصفات اليدوية هنا فقط كحل احتياطي متوافق مع الوضع الحالي.
+- لا تحذف `Coder` أو `CodeReviewer` من خط العمل؛ هما ما زالا مدعومين كبديل
+  يدوي عندما لا تكون الوكلاء المحلية متاحة.
+
+## Capability Truth
+
+- `Native Trae`: ميزة يوفّرها Trae نفسه.
+- `Verified Runtime`: سلوك ثبت فعلاً في هذا الـ runtime.
+- `Repository Implementation`: ملف أو عقد موجود داخل المستودع.
+- `Workaround`: بديل عملي لكنه ليس native durable state.
+- `Limitation`: قيد runtime لا يوجد له تنفيذ native آمن هنا.
+
+الحقيقة الحالية:
+
+- الوكيلان المدمجان `coder` و`code-reviewer` هما المساران الأكثر ثبوتًا
+  كـ `Verified Runtime`.
+- `security_reviewer` يعمل الآن عبر مسار `Verified Runtime` مدعوم بالوكيل
+  المدمج `code-reviewer`.
+- `qa_test_verifier` يعمل الآن عبر مسار `Verified Runtime` مدعوم بالوكيل
+  المدمج `default` تحت عقد تحقق فقط `no-edit verification contract`.
+- منع التعديل في `qa_test_verifier` هو قيد prompt/policy enforced، وليس
+  sandbox صلبًا خاصًا بالدور.
+- الملفات تحت `.trae/agents/` هي `Repository Implementation` مفيدة،
+  لكنها ليست claim بحد ذاتها أنها runtime-callable في كل workspace.
+- حالة المهام داخل `.trae/factory/tasks/*.json` هي `Workaround` repository-backed
+  وليست native Trae durable runtime state.
+- لا يوجد في هذا الـ environment إثبات آمن أن nested child-to-child delegation
+  متاح بشكل موثوق.
+
+## Mandatory Fallback Coverage
+
+عند غياب native project subagents، غطاء الأدوار الإلزامية يكون كالتالي:
+
+- `coder_implementer`:
+  - استخدم `Coder`
+- `code_reviewer`:
+  - استخدم `CodeReviewer`
+- `security_reviewer`:
+  - استخدم المسار التشغيلي `code-reviewer`
+- `qa_test_verifier`:
+  - استخدم المسار التشغيلي `default` تحت عقد تحقق فقط بدون تعديل
+
+هذا fallback صريح وعملي، لكنه ليس equivalent لوجود native runtime-isolated
+agent مستقل لكل دور، ولا يثبت أن ملفات `.trae/agents/*.md` قابلة للاستدعاء
+runtime بحد ذاتها.
+
+## Operational Definitions (V4-A)
+
+### security_reviewer
+
+- Name: Security Reviewer
+- Identifier: security_reviewer
+- Model: from `.trae/factory/config/model-routing.json` for Security
+- Tools: read-only review tools via built-in `code-reviewer`
+- Disallowed tools: edit, destructive commands, deploy, unverifiable runtime claims
+- Invocation path: chief_orchestrator -> security_reviewer contract -> verified runtime built-in `code-reviewer`
+- Expected outputs: `security_result`, focused risk notes, required mitigations, PASS/FAIL-style verdict
+- Fallback behavior: if the verified runtime binding is unavailable, use a second security-scoped `CodeReviewer` pass and disclose fallback use explicitly
+
+### qa_test_verifier
+
+- Name: QA Test Verifier
+- Identifier: qa_test_verifier
+- Model: from `.trae/factory/config/model-routing.json` for QA / Tests
+- Tools: built-in `default` for read-oriented, non-destructive verification steps and evidence recording
+- Disallowed tools: code edits, destructive commands, deploy; any write action outside explicit human approval
+- Invocation path: chief_orchestrator -> qa_test_verifier contract -> verified runtime built-in `default` under no-edit verification mode
+- Expected outputs: `qa_result`, verification summary, executed checks, remaining gaps
+- Fallback behavior: if the verified runtime binding is unavailable, chief_orchestrator performs the same verification contract manually and discloses that the no-edit rule is policy-enforced rather than a hard sandbox
 
 ---
 
@@ -68,9 +142,13 @@ Standards:
 
 ---
 
-## Session Models (V1.0)
+## Session Models (V2.0)
 
-افتح جلسة كل دور بالنموذج المحدد عبر قائمة النموذج (بديل Auto):
+المصدر الحاكم الآن هو:
+
+- `.trae/factory/config/model-routing.json`
+
+افتح جلسة كل دور أو اختر fallback طبقًا له، لا من الذاكرة:
 
 - Orchestrator / Planner: GPT-5.4
 - Coder: Kimi-K2.5
@@ -81,7 +159,7 @@ Standards:
 
 ---
 
-## Sync Discipline (V1.0)
+## Sync Discipline (V2.0)
 
 - Sync with remote before work when it is safe and relevant to the current
   branch.
@@ -91,3 +169,6 @@ Standards:
 - Do not push, merge, or deploy without explicit human approval.
 - Prefer a feature branch and PR flow for code changes; the human decides when
   to merge.
+- Record current role, current model, fallback usage, next automatic action,
+  and gate results in the tracked JSON task state instead of leaving them only
+  in chat.

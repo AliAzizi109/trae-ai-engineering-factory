@@ -223,6 +223,20 @@
       }
     },
     "security_reviewer": {
+      "runtime_execution": {
+        "decision": "convert_now",
+        "classification": "Verified Runtime",
+        "agent_type": "code-reviewer",
+        "model": "from model-routing.json for Security",
+        "invocation_path": "chief_orchestrator -> security_reviewer contract -> built-in code-reviewer",
+        "expected_outputs": [
+          "security_result",
+          "risk notes",
+          "required mitigations"
+        ],
+        "fallback_behavior": "If the verified runtime path is unavailable, run a second security-scoped CodeReviewer pass and disclose the fallback explicitly.",
+        "enforcement_note": "Read-only behavior is enforced by the code-reviewer runtime contract; do not claim repository-defined .trae/agents files are runtime-callable proof."
+      },
       "purpose": "Perform a focused security pass for obvious unsafe behavior, secrets exposure, and unsafe operational assumptions.",
       "trigger": [
         "Implementation reaches security review",
@@ -264,6 +278,20 @@
       }
     },
     "qa_test_verifier": {
+      "runtime_execution": {
+        "decision": "convert_now",
+        "classification": "Verified Runtime",
+        "agent_type": "default",
+        "model": "from model-routing.json for QA / Tests",
+        "invocation_path": "chief_orchestrator -> qa_test_verifier contract -> built-in default under no-edit verification mode",
+        "expected_outputs": [
+          "qa_result",
+          "verification_summary",
+          "remaining gaps"
+        ],
+        "fallback_behavior": "If the verified runtime path is unavailable, chief_orchestrator performs the same verification-only flow manually and discloses the fallback.",
+        "enforcement_note": "The no-edit rule for QA verification is prompt/policy enforced, not a hard per-role tool sandbox."
+      },
       "purpose": "Check that the requested workflow reached a truthful tested state and record what was or was not verified.",
       "trigger": [
         "Review passes or implementation is ready for testing",

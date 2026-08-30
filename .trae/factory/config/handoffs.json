@@ -17,8 +17,57 @@
   "handoffs": [
     {
       "from_role": "chief_orchestrator",
+      "to_role": "chief_orchestrator",
+      "when": "A new task is opened and intake details must be normalized before repository discovery begins.",
+      "required_inputs": [
+        "task_id",
+        "objective",
+        "initial request",
+        "constraints",
+        "priority"
+      ],
+      "required_state_updates": {
+        "current_phase": "discovery",
+        "current_role": "chief_orchestrator",
+        "status": "in_progress",
+        "next_automatic_action": "Confirm scope, assumptions, and discovery targets before research handoff."
+      },
+      "expected_outputs": [
+        "normalized objective",
+        "scoped request",
+        "discovery targets"
+      ],
+      "escalation_on_failure": "Pause and request missing intake details from the human."
+    },
+    {
+      "from_role": "chief_orchestrator",
       "to_role": "research_docs",
-      "when": "A new task is opened and the orchestrator needs repository evidence before planning.",
+      "when": "Discovery clarifies the task scope and repository evidence collection must begin.",
+      "required_inputs": [
+        "task_id",
+        "objective",
+        "scope",
+        "constraints",
+        "priority",
+        "discovery notes"
+      ],
+      "required_state_updates": {
+        "current_phase": "research",
+        "current_role": "research_docs",
+        "status": "in_progress",
+        "next_automatic_action": "Collect factual repository evidence and document constraints before planning."
+      },
+      "expected_outputs": [
+        "findings",
+        "constraints",
+        "relevant docs and code references"
+      ],
+      "escalation_on_failure": "Return to chief_orchestrator with blocker and clarification request."
+    },
+    {
+      "from_role": "chief_orchestrator",
+      "to_role": "research_docs",
+      "when": "Additional repository evidence is needed during research before planning can continue.",
       "required_inputs": [
         "task_id",
         "objective",
@@ -111,6 +160,7 @@
       "from_role": "code_reviewer",
       "to_role": "security_reviewer",
       "when": "Code review passes or security review is explicitly required.",
+      "verified_runtime_invocation": "Invoke the security_reviewer contract through the verified runtime built-in agent type `code-reviewer` using the model selected by model-routing.json for Security.",
       "required_inputs": [
         "review_result",
         "changed files",
@@ -127,12 +177,14 @@
         "risk notes",
         "required mitigations"
       ],
+      "fallback_behavior": "If the verified runtime path is unavailable, run a second security-scoped CodeReviewer pass and disclose that fallback explicitly.",
       "escalation_on_failure": "Return exact security blockers to coder_implementer and chief_orchestrator."
     },
     {
       "from_role": "security_reviewer",
       "to_role": "qa_test_verifier",
       "when": "Implementation is review-complete and verification evidence is required.",
+      "verified_runtime_invocation": "Invoke the qa_test_verifier contract through the verified runtime built-in agent type `default` under a strict no-edit, non-destructive verification contract. The no-edit rule is prompt/policy enforced, not a hard per-role sandbox.",
       "required_inputs": [
         "review_result",
         "security_result",
@@ -150,6 +202,7 @@
         "verification_summary",
         "remaining gaps"
       ],
+      "fallback_behavior": "If the verified runtime path is unavailable, chief_orchestrator performs the same verification-only flow manually and discloses the fallback.",
       "escalation_on_failure": "Return failed verification details to chief_orchestrator."
     },
     {
