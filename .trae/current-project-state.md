@@ -1,6 +1,6 @@
 # Current Project State
 
-Last updated: 2026-08-29
+Last updated: 2026-08-30
 
 ## Project Identity
 
@@ -32,6 +32,11 @@ Last updated: 2026-08-29
 - The baseline now supports initializing a new repository identity through `scripts/initialize-factory-project.ps1`.
 - The initializer behavior was generalized so README updates apply only while a repository still uses the baseline identity header; adopted repositories can keep a project-specific README without being reshaped on every run.
 - The baseline docs portability rule is now explicit: active operating documents should use repository-relative links, while historical `file:///` links are fixed only when a document becomes an active entrypoint again.
+- Native project subagents now exist under `.trae/agents/` for review, security review, and verification with least-privilege tool scopes.
+- Persistent task-state support now exists under `.trae/factory/` with a tracked task template, a task model, a system summary, and a verification matrix.
+- The baseline now includes `scripts/new-factory-task.ps1` for creating task records with generated Task IDs.
+- The upgraded factory layer has now been validated on `ProNetworkApp-Dev`, including bootstrap checks, persistent task creation, independent review, and a recovered unit-test run.
+- V3 operator improvements are now being added on top of the hardened V2 task-state safety model rather than replacing it.
 
 ## Current Task And Scope
 
@@ -44,16 +49,27 @@ Current scope:
 - Continue reducing manual setup and manual orchestration while preserving review and approval gates.
 - Keep the reusable initializer adoption-safe across project-specific repositories instead of assuming every repo keeps the baseline README shape.
 - Keep active operating documentation portable across machines by preferring repository-relative links.
+- Prefer native project subagents when they are available in Trae, while keeping the manual `Coder` and `CodeReviewer` setup as fallback.
+- Keep persistent task status in repository-tracked task records with minimal document clutter.
+- Improve day-to-day operator visibility and schema tolerance without weakening existing task-state safeguards.
 
 Primary files in the current scope:
 
 - `AGENTS.md`
+- `.trae/agents/factory-reviewer.md`
+- `.trae/agents/security-reviewer.md`
+- `.trae/agents/qa-verifier.md`
 - `.trae/rules/00-constitution.md`
 - `.trae/agent-specs.md`
+- `.trae/factory/factory-system.md`
+- `.trae/factory/verification-matrix.md`
+- `.trae/factory/tasks/README.md`
+- `.trae/factory/templates/task.md`
 - `.trae/mcp.json`
 - `scripts/bootstrap-factory.ps1`
 - `scripts/bootstrap-project-fs.ps1`
 - `scripts/initialize-factory-project.ps1`
+- `scripts/new-factory-task.ps1`
 - `.trae-local/mcp/project-fs/package.json`
 - `.trae-local/mcp/project-fs/package-lock.json`
 - `.gitignore`
@@ -63,13 +79,21 @@ Primary files in the current scope:
 Files that should travel through GitHub across devices:
 
 - `AGENTS.md`
+- `.trae/agents/factory-reviewer.md`
+- `.trae/agents/security-reviewer.md`
+- `.trae/agents/qa-verifier.md`
 - `.trae/rules/00-constitution.md`
 - `.trae/agent-specs.md`
 - `.trae/current-project-state.md`
+- `.trae/factory/factory-system.md`
+- `.trae/factory/verification-matrix.md`
+- `.trae/factory/tasks/README.md`
+- `.trae/factory/templates/task.md`
 - `.trae/mcp.json`
 - `scripts/bootstrap-factory.ps1`
 - `scripts/bootstrap-project-fs.ps1`
 - `scripts/initialize-factory-project.ps1`
+- `scripts/new-factory-task.ps1`
 - `.gitignore`
 - `.trae-local/mcp/project-fs/package.json`
 - `.trae-local/mcp/project-fs/package-lock.json`
@@ -79,13 +103,21 @@ Files that should travel through GitHub across devices:
 The current baseline commit set should include:
 
 - `AGENTS.md`
+- `.trae/agents/factory-reviewer.md`
+- `.trae/agents/security-reviewer.md`
+- `.trae/agents/qa-verifier.md`
 - `.trae/rules/00-constitution.md`
 - `.trae/agent-specs.md`
 - `.trae/current-project-state.md`
+- `.trae/factory/factory-system.md`
+- `.trae/factory/verification-matrix.md`
+- `.trae/factory/tasks/README.md`
+- `.trae/factory/templates/task.md`
 - `.trae/mcp.json`
 - `scripts/bootstrap-factory.ps1`
 - `scripts/bootstrap-project-fs.ps1`
 - `scripts/initialize-factory-project.ps1`
+- `scripts/new-factory-task.ps1`
 - `.gitignore`
 - `.trae-local/mcp/project-fs/package.json`
 - `.trae-local/mcp/project-fs/package-lock.json`
@@ -113,6 +145,10 @@ Items that should remain local to a machine or session:
 
 - Trae Ultra
 - Built-in Agent orchestration
+- Native project subagents:
+  - `factory-reviewer`
+  - `security-reviewer`
+  - `qa-verifier`
 - Custom agents:
   - `Coder`
   - `CodeReviewer`
@@ -135,9 +171,12 @@ Items that should remain local to a machine or session:
 - `pytest` is not installed in the current environment, so local execution-based verification is incomplete.
 - `Coder` was confirmed to use MCP for reading, but it still preferred built-in editing for writing. This is not a blocking issue, but it remains an observed behavior.
 - The current bootstrap is Windows-first because it explicitly uses `npm.cmd`.
-- The next adoption still needs to be validated on another repository, not only inside this baseline repository itself.
 - Some historical or archive documents may still contain older machine-specific `file:///` links; those should be updated only when the document becomes an active operating reference again.
+- Native project subagent frontmatter support is documented in-repo, but final runtime behavior still depends on Trae support in the active workspace.
+- Native project subagents also depend on the Subagents Directory feature being enabled in the active Trae workspace.
+- Portable MCP configuration does not remove the runtime fact that a live session is still scoped to the active workspace.
+- The production-grade factory flow still lacks a fully native Windows sandbox boundary in Trae; this remains a documented platform limitation rather than a repository defect.
 
 ## Next Recommended Step
 
-Use this baseline in a first real project adoption on another repository and validate the generalized initializer flow plus the docs portability rule there.
+Use this baseline for the next approved real task now that the native subagent layer, persistent task-state model, and first adopted-project validation have all been exercised.

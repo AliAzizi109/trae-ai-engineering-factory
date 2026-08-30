@@ -1,0 +1,219 @@
+{
+  "schema_version": "factory-handoffs-v2",
+  "last_updated": "2026-08-30",
+  "truthfulness_note": "These handoffs are repository contracts. They document intended sequencing and required state transitions, not guaranteed native runtime automation in the active Trae environment.",
+  "phase_sequence": [
+    "intake",
+    "discovery",
+    "research",
+    "plan",
+    "implement",
+    "review",
+    "security_review",
+    "qa",
+    "release_gate",
+    "human_approval"
+  ],
+  "handoffs": [
+    {
+      "from_role": "chief_orchestrator",
+      "to_role": "research_docs",
+      "when": "A new task is opened and the orchestrator needs repository evidence before planning.",
+      "required_inputs": [
+        "task_id",
+        "objective",
+        "scope",
+        "constraints",
+        "priority"
+      ],
+      "required_state_updates": {
+        "current_phase": "research",
+        "current_role": "research_docs",
+        "status": "in_progress",
+        "next_automatic_action": "Collect factual repository evidence and document constraints before planning."
+      },
+      "expected_outputs": [
+        "findings",
+        "constraints",
+        "relevant docs and code references"
+      ],
+      "escalation_on_failure": "Return to chief_orchestrator with blocker and clarification request."
+    },
+    {
+      "from_role": "research_docs",
+      "to_role": "planner_architect",
+      "when": "Repository evidence is sufficient and the task needs an actionable plan.",
+      "required_inputs": [
+        "objective",
+        "scope",
+        "constraints",
+        "current findings",
+        "runtime limitations"
+      ],
+      "required_state_updates": {
+        "current_phase": "plan",
+        "current_role": "planner_architect",
+        "next_automatic_action": "Produce an actionable plan and record assumptions."
+      },
+      "expected_outputs": [
+        "plan",
+        "assumptions",
+        "next implementation step"
+      ],
+      "escalation_on_failure": "Record uncertainty explicitly and return to chief_orchestrator."
+    },
+    {
+      "from_role": "planner_architect",
+      "to_role": "coder_implementer",
+      "when": "The implementation plan is approved and the task is ready for scoped changes.",
+      "required_inputs": [
+        "plan",
+        "target files",
+        "constraints",
+        "review expectations"
+      ],
+      "required_state_updates": {
+        "current_phase": "implement",
+        "current_role": "coder_implementer",
+        "next_automatic_action": "Implement only the approved scoped changes."
+      },
+      "expected_outputs": [
+        "changed files",
+        "implementation notes",
+        "execution_log entries"
+      ],
+      "escalation_on_failure": "Return blocker details to chief_orchestrator."
+    },
+    {
+      "from_role": "coder_implementer",
+      "to_role": "code_reviewer",
+      "when": "Scoped implementation completes and a read-only review is required.",
+      "required_inputs": [
+        "changed files",
+        "objective",
+        "constraints",
+        "implementation notes"
+      ],
+      "required_state_updates": {
+        "current_phase": "review",
+        "current_role": "code_reviewer",
+        "review_result": "pending",
+        "next_automatic_action": "Review the implementation and return PASS or FAIL."
+      },
+      "expected_outputs": [
+        "review_result",
+        "findings",
+        "required fixes or PASS"
+      ],
+      "escalation_on_failure": "Return exact review blockers to coder_implementer."
+    },
+    {
+      "from_role": "code_reviewer",
+      "to_role": "security_reviewer",
+      "when": "Code review passes or security review is explicitly required.",
+      "required_inputs": [
+        "review_result",
+        "changed files",
+        "configuration changes"
+      ],
+      "required_state_updates": {
+        "current_phase": "security_review",
+        "current_role": "security_reviewer",
+        "security_result": "pending",
+        "next_automatic_action": "Perform a focused security review."
+      },
+      "expected_outputs": [
+        "security_result",
+        "risk notes",
+        "required mitigations"
+      ],
+      "escalation_on_failure": "Return exact security blockers to coder_implementer and chief_orchestrator."
+    },
+    {
+      "from_role": "security_reviewer",
+      "to_role": "qa_test_verifier",
+      "when": "Implementation is review-complete and verification evidence is required.",
+      "required_inputs": [
+        "review_result",
+        "security_result",
+        "changed files",
+        "available checks"
+      ],
+      "required_state_updates": {
+        "current_phase": "qa",
+        "current_role": "qa_test_verifier",
+        "qa_result": "pending",
+        "next_automatic_action": "Verify what was actually tested and record any gaps."
+      },
+      "expected_outputs": [
+        "qa_result",
+        "verification_summary",
+        "remaining gaps"
+      ],
+      "escalation_on_failure": "Return failed verification details to chief_orchestrator."
+    },
+    {
+      "from_role": "qa_test_verifier",
+      "to_role": "git_release_gatekeeper",
+      "when": "Review, security, and QA results are available for gate evaluation.",
+      "required_inputs": [
+        "review_result",
+        "security_result",
+        "qa_result",
+        "verification_summary"
+      ],
+      "required_state_updates": {
+        "current_phase": "release_gate",
+        "current_role": "git_release_gatekeeper",
+        "next_automatic_action": "Check gate readiness and list any missing approvals."
+      },
+      "expected_outputs": [
+        "go_or_no_go",
+        "missing_gate_items",
+        "final outcome recommendation"
+      ],
+      "escalation_on_failure": "Return missing gate items to chief_orchestrator and human."
+    },
+    {
+      "from_role": "git_release_gatekeeper",
+      "to_role": "chief_orchestrator",
+      "when": "The gate decision is ready for final coordination and human approval handling.",
+      "required_inputs": [
+        "review_result",
+        "security_result",
+        "qa_result",
+        "final recommendation"
+      ],
+      "required_state_updates": {
+        "current_phase": "human_approval",
+        "current_role": "chief_orchestrator",
+        "status": "awaiting_human_approval",
+        "next_automatic_action": "Request human approval or stop with a no-go summary."
+      },
+      "expected_outputs": [
+        "approval request",
+        "final summary",
+        "final_outcome when approved"
+      ],
+      "escalation_on_failure": "Pause and wait for explicit human direction."
+    }
+  ],
+  "event_logging_contract": {
+    "append_event_on": [
+      "task creation",
+      "phase transition",
+      "model fallback",
+      "review verdict",
+      "security verdict",
+      "qa verdict",
+      "blocker",
+      "escalation"
+    ],
+    "minimum_event_fields": [
+      "timestamp",
+      "type",
+      "role",
+      "summary"
+    ]
+  }
+}

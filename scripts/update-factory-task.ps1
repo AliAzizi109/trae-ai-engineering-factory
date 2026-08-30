@@ -104,6 +104,7 @@ param(
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 $script:AllowedTaskPriorities = @('low', 'medium', 'high', 'critical')
+$script:InvocationParameters = @{} + $PSBoundParameters
 
 function Get-ProjectRoot {
     [OutputType([string])]
@@ -534,7 +535,12 @@ function Get-TaskStateContract {
     $handoffs = Read-JsonHashtable -Path $handoffsPath -Description 'Factory handoff contract'
     $roleSystem = Read-JsonHashtable -Path $roleSystemPath -Description 'Factory role contract'
 
-    $phases = @($handoffs.phase_sequence | ForEach-Object { [string]$_ })
+    if ($handoffs.Contains('phase_sequence') -and $null -ne $handoffs.phase_sequence) {
+        $phases = @($handoffs.phase_sequence | ForEach-Object { [string]$_ })
+    }
+    else {
+        $phases = @('intake', 'discovery', 'research', 'plan', 'implement', 'review', 'security_review', 'qa', 'release_gate', 'human_approval')
+    }
     $roles = @($roleSystem.roles.Keys | ForEach-Object { [string]$_ })
 
     if ($phases.Count -eq 0) {
@@ -1060,6 +1066,345 @@ function Assert-TaskStateContract {
     Assert-ValidatedTaskStateFieldValue -FieldName 'state_backend' -Value $State.state_backend -Contract $Contract
 }
 
+function Get-CanonicalStringValue {
+    [OutputType([string])]
+    param(
+        [AllowNull()]
+        $Value,
+
+        [string[]]$PropertyNames = @('status')
+    )
+
+    if ($null -eq $Value) {
+        return ''
+    }
+
+    if ($Value -is [string]) {
+        return $Value
+    }
+
+    if ($Value -is [System.Collections.IDictionary]) {
+        foreach ($propertyName in $PropertyNames) {
+            if ($Value.Contains($propertyName) -and $Value[$propertyName] -is [string]) {
+                return [string]$Value[$propertyName]
+            }
+        }
+
+        return ''
+    }
+
+    return [string]$Value
+}
+
+function Convert-ToCanonicalExecutionLogEntries {
+    [OutputType([object[]])]
+    param(
+        [AllowNull()]
+        $Value
+    )
+
+    $entries = New-Object System.Collections.Generic.List[object]
+    foreach ($item in (Ensure-List -Value $Value)) {
+        if ($item -is [System.Collections.IDictionary]) {
+            $timestamp = Get-CanonicalStringValue -Value $item['timestamp']
+            if ([string]::IsNullOrWhiteSpace($timestamp)) {
+                $timestamp = Get-CanonicalStringValue -Value $item['time']
+            }
+
+            $role = Get-CanonicalStringValue -Value $item['role']
+            if ([string]::IsNullOrWhiteSpace($role)) {
+                $role = Get-CanonicalStringValue -Value $item['actor']
+            }
+            if ([string]::IsNullOrWhiteSpace($role)) {
+                $role = Get-CanonicalStringValue -Value $item['type']
+            }
+
+            $message = Get-CanonicalStringValue -Value $item['message']
+            if ([string]::IsNullOrWhiteSpace($message)) {
+                $message = Get-CanonicalStringValue -Value $item['detail']
+            }
+            if ([string]::IsNullOrWhiteSpace($message)) {
+                $message = Get-CanonicalStringValue -Value $item['summary']
+            }
+
+            if (-not [string]::IsNullOrWhiteSpace($timestamp) -and -not [string]::IsNullOrWhiteSpace($message)) {
+                $entries.Add(@{
+                    timestamp = $timestamp
+                    role = $(if ([string]::IsNullOrWhiteSpace($role)) { 'task_state_coordinator' } else { $role })
+                    message = $message
+                })
+            }
+            continue
+        }
+
+        if ($item -is [string] -and -not [string]::IsNullOrWhiteSpace($item)) {
+            $entries.Add(@{
+                timestamp = ''
+                role = 'task_state_coordinator'
+                message = $item.Trim()
+            })
+        }
+    }
+
+    return ,($entries.ToArray())
+}
+
+function Convert-ToCanonicalEventEntries {
+    [OutputType([object[]])]
+    param(
+        [AllowNull()]
+        $Value
+    )
+
+    $entries = New-Object System.Collections.Generic.List[object]
+    foreach ($item in (Ensure-List -Value $Value)) {
+        if ($item -is [System.Collections.IDictionary]) {
+            $timestamp = Get-CanonicalStringValue -Value $item['timestamp']
+            if ([string]::IsNullOrWhiteSpace($timestamp)) {
+                $timestamp = Get-CanonicalStringValue -Value $item['time']
+            }
+
+            $type = Get-CanonicalStringValue -Value $item['type']
+            $role = Get-CanonicalStringValue -Value $item['role']
+            if ([string]::IsNullOrWhiteSpace($role)) {
+                $role = Get-CanonicalStringValue -Value $item['actor']
+            }
+
+            $summary = Get-CanonicalStringValue -Value $item['summary']
+            if ([string]::IsNullOrWhiteSpace($summary)) {
+                $summary = Get-CanonicalStringValue -Value $item['detail']
+            }
+            if ([string]::IsNullOrWhiteSpace($summary)) {
+                $summary = Get-CanonicalStringValue -Value $item['message']
+            }
+
+            if (-not [string]::IsNullOrWhiteSpace($timestamp) -and -not [string]::IsNullOrWhiteSpace($summary)) {
+                $entries.Add(@{
+                    timestamp = $timestamp
+                    type = $(if ([string]::IsNullOrWhiteSpace($type)) { 'note' } else { $type })
+                    role = $(if ([string]::IsNullOrWhiteSpace($role)) { 'task_state_coordinator' } else { $role })
+                    summary = $summary
+                })
+            }
+            continue
+        }
+
+        if ($item -is [string] -and -not [string]::IsNullOrWhiteSpace($item)) {
+            $entries.Add(@{
+                timestamp = ''
+                type = 'note'
+                role = 'task_state_coordinator'
+                summary = $item.Trim()
+            })
+        }
+    }
+
+    return ,($entries.ToArray())
+}
+
+function Convert-ToCanonicalModelAttemptEntries {
+    [OutputType([object[]])]
+    param(
+        [AllowNull()]
+        $Value
+    )
+
+    $entries = New-Object System.Collections.Generic.List[object]
+    foreach ($item in (Ensure-List -Value $Value)) {
+        if ($item -is [System.Collections.IDictionary]) {
+            $timestamp = Get-CanonicalStringValue -Value $item['timestamp']
+            if ([string]::IsNullOrWhiteSpace($timestamp)) {
+                $timestamp = Get-CanonicalStringValue -Value $item['time']
+            }
+
+            $role = Get-CanonicalStringValue -Value $item['role']
+            $model = Get-CanonicalStringValue -Value $item['model']
+            $outcome = Get-CanonicalStringValue -Value $item['outcome'] -PropertyNames @('outcome', 'status', 'result')
+            $fallbackUsed = $false
+            if ($item.Contains('fallback_used')) {
+                $fallbackUsed = [bool]$item['fallback_used']
+            }
+            elseif ($item.Contains('fallback')) {
+                $fallbackUsed = [bool]$item['fallback']
+            }
+
+            if (-not [string]::IsNullOrWhiteSpace($model)) {
+                $entries.Add(@{
+                    timestamp = $timestamp
+                    role = $(if ([string]::IsNullOrWhiteSpace($role)) { 'task_state_coordinator' } else { $role })
+                    model = $model
+                    outcome = $(if ([string]::IsNullOrWhiteSpace($outcome)) { 'recorded' } else { $outcome })
+                    fallback_used = $fallbackUsed
+                })
+            }
+            continue
+        }
+    }
+
+    return ,($entries.ToArray())
+}
+
+function Get-DefaultCapabilityClassification {
+    [OutputType([hashtable])]
+    param()
+
+    return @{
+        declared_contract = 'repository_implementation'
+        orchestration_mode = 'orchestrator_managed_phase_contract'
+        repo_defined_agents_runtime_callable_verified = $false
+        verified_runtime_note = 'Only capabilities directly proven in the active Trae environment should be treated as verified runtime.'
+        workaround_note = 'JSON task state, config routing, and scripts provide durable coordination in this repository baseline.'
+        limitation_note = 'Repository-defined .trae/agents are not assumed runtime-callable by default in this environment.'
+    }
+}
+
+function Normalize-TaskState {
+    [OutputType([hashtable])]
+    param(
+        [Parameter(Mandatory = $true)]
+        [hashtable]$State
+    )
+
+    if ($State.Contains('review_result') -and $State.review_result -is [System.Collections.IDictionary]) {
+        $State.review_result = Get-CanonicalStringValue -Value $State.review_result -PropertyNames @('status')
+    }
+
+    if ($State.Contains('security_result') -and $State.security_result -is [System.Collections.IDictionary]) {
+        $State.security_result = Get-CanonicalStringValue -Value $State.security_result -PropertyNames @('status')
+    }
+
+    if ($State.Contains('qa_result') -and $State.qa_result -is [System.Collections.IDictionary]) {
+        $State.qa_result = Get-CanonicalStringValue -Value $State.qa_result -PropertyNames @('status')
+    }
+
+    if (-not $State.Contains('review_result') -or [string]::IsNullOrWhiteSpace([string]$State.review_result)) {
+        $State.review_result = 'pending'
+    }
+
+    if (-not $State.Contains('security_result') -or [string]::IsNullOrWhiteSpace([string]$State.security_result)) {
+        $State.security_result = 'pending'
+    }
+
+    if (-not $State.Contains('qa_result') -or [string]::IsNullOrWhiteSpace([string]$State.qa_result)) {
+        $State.qa_result = 'pending'
+    }
+
+    if ($State.Contains('blocker') -and $State.blocker -isnot [string]) {
+        $State.blocker = ((ConvertTo-StringArray -Value $State.blocker) -join '; ')
+    }
+
+    foreach ($arrayField in @('scope', 'constraints', 'findings', 'remaining_work', 'evidence')) {
+        if (-not $State.Contains($arrayField)) {
+            $State[$arrayField] = @()
+            continue
+        }
+
+        $State[$arrayField] = ConvertTo-StringArray -Value $State[$arrayField]
+    }
+
+    if (-not $State.Contains('execution_log')) {
+        $State.execution_log = @()
+    }
+    $State.execution_log = Convert-ToCanonicalExecutionLogEntries -Value $State.execution_log
+
+    if (-not $State.Contains('events')) {
+        $State.events = @()
+    }
+    $State.events = Convert-ToCanonicalEventEntries -Value $State.events
+
+    if (-not $State.Contains('model_attempts')) {
+        $State.model_attempts = @()
+    }
+    $State.model_attempts = Convert-ToCanonicalModelAttemptEntries -Value $State.model_attempts
+
+    if ($State.Contains('artifacts')) {
+        $State.evidence = Add-StringEntries -Existing (Ensure-List -Value $State.evidence) -Items (ConvertTo-StringArray -Value $State.artifacts)
+        $State.Remove('artifacts') | Out-Null
+    }
+
+    if (-not $State.Contains('capability_classification') -or $State.capability_classification -isnot [System.Collections.IDictionary]) {
+        $State.capability_classification = Get-DefaultCapabilityClassification
+    }
+    else {
+        foreach ($entry in (Get-DefaultCapabilityClassification).GetEnumerator()) {
+            if (-not $State.capability_classification.Contains($entry.Key)) {
+                $State.capability_classification[$entry.Key] = $entry.Value
+            }
+        }
+    }
+
+    if (-not $State.Contains('schema_version') -or [string]::IsNullOrWhiteSpace([string]$State.schema_version)) {
+        $State.schema_version = 'factory-task-state-v2'
+    }
+
+    if (-not $State.Contains('state_backend') -or [string]::IsNullOrWhiteSpace([string]$State.state_backend)) {
+        $State.state_backend = 'repository_json_workaround'
+    }
+
+    return $State
+}
+
+function Add-AutomaticTransitionEntries {
+    [OutputType([void])]
+    param(
+        [Parameter(Mandatory = $true)]
+        [hashtable]$PreviousState,
+
+        [Parameter(Mandatory = $true)]
+        [hashtable]$CurrentState,
+
+        [Parameter(Mandatory = $true)]
+        [string]$Timestamp
+    )
+
+    $roleForEntries = if ([string]::IsNullOrWhiteSpace([string]$CurrentState.current_role)) { 'task_state_coordinator' } else { [string]$CurrentState.current_role }
+    $fieldMap = @(
+        @{ field = 'current_phase'; label = 'Phase'; event_type = 'phase_changed' }
+        @{ field = 'current_role'; label = 'Role'; event_type = 'role_changed' }
+        @{ field = 'current_model'; label = 'Model'; event_type = 'model_changed' }
+        @{ field = 'fallback_used'; label = 'Fallback usage'; event_type = 'fallback_changed' }
+        @{ field = 'status'; label = 'Status'; event_type = 'status_changed' }
+        @{ field = 'blocker'; label = 'Blocker'; event_type = 'blocker_changed' }
+        @{ field = 'review_result'; label = 'Review'; event_type = 'review_changed' }
+        @{ field = 'security_result'; label = 'Security'; event_type = 'security_changed' }
+        @{ field = 'qa_result'; label = 'QA'; event_type = 'qa_changed' }
+    )
+
+    foreach ($fieldEntry in $fieldMap) {
+        $before = [string]$PreviousState[$fieldEntry.field]
+        $after = [string]$CurrentState[$fieldEntry.field]
+        if ($before -ceq $after) {
+            continue
+        }
+
+        if ([string]::IsNullOrWhiteSpace($before)) {
+            $message = "{0} set to '{1}'." -f $fieldEntry.label, $after
+        }
+        elseif ([string]::IsNullOrWhiteSpace($after)) {
+            $message = "{0} cleared from '{1}'." -f $fieldEntry.label, $before
+        }
+        else {
+            $message = "{0} changed from '{1}' to '{2}'." -f $fieldEntry.label, $before, $after
+        }
+
+        $CurrentState.execution_log = Add-ExecutionLogEntries -Existing (Ensure-List -Value $CurrentState.execution_log) -Items @($message) -Timestamp $Timestamp -Role $roleForEntries
+        $CurrentState.events = Add-EventEntries -Existing (Ensure-List -Value $CurrentState.events) -Items @($message) -Timestamp $Timestamp -Role $roleForEntries
+        $CurrentState.events[-1].type = $fieldEntry.event_type
+    }
+
+    if (($PreviousState.current_model -cne $CurrentState.current_model) -or ($PreviousState.fallback_used -ne $CurrentState.fallback_used)) {
+        if (-not [string]::IsNullOrWhiteSpace([string]$CurrentState.current_model)) {
+            $CurrentState.model_attempts = Add-ModelAttemptEntries `
+                -Existing (Ensure-List -Value $CurrentState.model_attempts) `
+                -Items @('selected') `
+                -Timestamp $Timestamp `
+                -Role $roleForEntries `
+                -Model $CurrentState.current_model `
+                -WasFallback ([Nullable[bool]]$CurrentState.fallback_used)
+        }
+    }
+}
+
 function Ensure-List {
     [OutputType([object[]])]
     param(
@@ -1072,6 +1417,44 @@ function Ensure-List {
     }
 
     return ,@($Value)
+}
+
+function ConvertTo-StringArray {
+    [OutputType([string[]])]
+    param(
+        [AllowNull()]
+        $Value
+    )
+
+    if ($null -eq $Value) {
+        return @()
+    }
+
+    if ($Value -is [string]) {
+        if ([string]::IsNullOrWhiteSpace($Value)) {
+            return @()
+        }
+
+        return ,@($Value.Trim())
+    }
+
+    if ($Value -is [System.Collections.IEnumerable]) {
+        $items = New-Object System.Collections.Generic.List[string]
+        foreach ($item in $Value) {
+            if ($null -eq $item -or $item -is [System.Collections.IDictionary]) {
+                continue
+            }
+
+            $text = [string]$item
+            if (-not [string]::IsNullOrWhiteSpace($text)) {
+                $items.Add($text.Trim())
+            }
+        }
+
+        return ,($items.ToArray())
+    }
+
+    return ,@([string]$Value)
 }
 
 function Add-StringEntries {
@@ -2078,6 +2461,8 @@ function Main {
     try {
         $taskFileStream = Open-ValidatedTaskFileForUpdate -Path $taskFilePath -TasksRoot $tasksRoot
         $state = Read-TaskState -Stream $taskFileStream -DisplayPath $taskFilePath -ResolvedContent ([ref]$resolvedTaskContent)
+        $state = Normalize-TaskState -State $state
+        $previousState = ConvertTo-HashtableObject -Value $state
         $timestamp = (Get-Date).ToUniversalTime().ToString('o')
 
         if (-not [string]::IsNullOrWhiteSpace($SetFieldJson)) {
@@ -2116,19 +2501,19 @@ function Main {
         $state.retry_count = [int]$RetryCount
     }
 
-    if ($PSBoundParameters.ContainsKey('Blocker')) {
+    if ($script:InvocationParameters.ContainsKey('Blocker')) {
         $state.blocker = $Blocker
     }
 
-    if ($PSBoundParameters.ContainsKey('NextAutomaticAction')) {
+    if ($script:InvocationParameters.ContainsKey('NextAutomaticAction')) {
         $state.next_automatic_action = $NextAutomaticAction
     }
 
-    if ($PSBoundParameters.ContainsKey('EscalationReason')) {
+    if ($script:InvocationParameters.ContainsKey('EscalationReason')) {
         $state.escalation_reason = $EscalationReason
     }
 
-    if ($PSBoundParameters.ContainsKey('FinalOutcome')) {
+    if ($script:InvocationParameters.ContainsKey('FinalOutcome')) {
         $state.final_outcome = $FinalOutcome
     }
 
@@ -2169,6 +2554,8 @@ function Main {
         -WasFallback $FallbackUsed
     $state.updated_at = $timestamp
     $state.model_attempts = Add-JsonEntries -Existing (Ensure-List -Value $state.model_attempts) -Items $AppendModelAttemptJson -DestinationField 'model_attempts'
+        $state = Normalize-TaskState -State $state
+        Add-AutomaticTransitionEntries -PreviousState $previousState -CurrentState $state -Timestamp $timestamp
         Assert-TaskStateContract -State $state -Contract $contract
 
         Write-TaskState `

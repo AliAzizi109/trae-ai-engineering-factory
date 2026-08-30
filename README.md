@@ -12,14 +12,38 @@ This repository is a small, reusable baseline for running an AI engineering fact
 - Preserves a disciplined workflow: research, plan, implementation, review, testing, and human approval.
 - Separates tracked baseline files from machine-local artifacts.
 
+## V3 Operations
+
+- `scripts/get-factory-operator-status.ps1` gives a quick repo-level dashboard with active/latest task selection, blockers, gates, approval need, and open/blocked/awaiting-approval counts.
+- `scripts/get-factory-task-summary.ps1` normalizes older or variant task JSON records and exposes operator-derived fields such as gate status, blocker state, latest event, and latest model attempt.
+- `scripts/update-factory-task.ps1` normalizes legacy task state before validation/write and auto-logs major phase, role, model, fallback, blocker, and gate transitions.
+- `scripts/select-factory-model.ps1` includes selection index, remaining candidates, the next fallback candidate, and an operator summary while keeping the routing truthfulness note explicit.
+- The V2 hardening model remains in place: task-path scope checks, exact handle validation, and synchronized backup guards are preserved or strengthened rather than replaced.
+
 ## Repository Structure
 
 ```text
 .
 |- AGENTS.md
 |- .trae/
+|  |- agents/
+|  |  |- factory-reviewer.md
+|  |  |- qa-verifier.md
+|  |  `- security-reviewer.md
 |  |- agent-specs.md
 |  |- current-project-state.md
+|  |- factory/
+|  |  |- config/
+|  |  |  |- handoffs.json
+|  |  |  |- model-routing.json
+|  |  |  `- role-system.json
+|  |  |- factory-system.md
+|  |  |- verification-matrix.md
+|  |  |- tasks/
+|  |  |  `- README.md
+|  |  `- templates/
+|  |     |- task-state.template.json
+|  |     `- task.md
 |  |- mcp.json
 |  `- rules/
 |     `- 00-constitution.md
@@ -31,7 +55,12 @@ This repository is a small, reusable baseline for running an AI engineering fact
 |- scripts/
 |  |- bootstrap-factory.ps1
 |  |- bootstrap-project-fs.ps1
-|  `- initialize-factory-project.ps1
+|  |- get-factory-operator-status.ps1
+|  |- get-factory-task-summary.ps1
+|  |- initialize-factory-project.ps1
+|  |- new-factory-task.ps1
+|  |- select-factory-model.ps1
+|  `- update-factory-task.ps1
 `- test_poc/
    `- test_calc.py
 ```
@@ -42,12 +71,23 @@ The following tracked files define the reusable factory baseline:
 
 - `AGENTS.md`: repository-level operating model, workflow, roles, and safety expectations.
 - `.trae/rules/00-constitution.md`: the authoritative factory constitution and required pipeline.
+- `.trae/agents/*.md`: native project subagents with least-privilege tool scopes for review, security review, and verification.
 - `.trae/agent-specs.md`: manual setup specifications for custom agents such as `Coder` and `CodeReviewer`.
 - `.trae/current-project-state.md`: current baseline status, scope, local-artifact policy, and open items.
+- `.trae/factory/config/*.json`: role contracts, model routing, and explicit handoff contracts for the V2 operating model.
+- `.trae/factory/factory-system.md`: concise architecture, workflow, security, state, limitation, and recovery notes.
+- `.trae/factory/verification-matrix.md`: capability matrix plus a reusable verification-results template.
+- `.trae/factory/tasks/README.md`: task-state tracking model for persistent task records.
+- `.trae/factory/templates/task-state.template.json`: authoritative V2 task-state template.
+- `.trae/factory/templates/task.md`: tracked template for individual task records.
 - `.trae/mcp.json`: project-scoped MCP configuration that points the filesystem server at the current workspace.
 - `scripts/bootstrap-factory.ps1`: the main entrypoint; validates the baseline and then bootstraps local MCP dependencies.
 - `scripts/bootstrap-project-fs.ps1`: installs the local project-fs MCP dependencies deterministically with `npm ci`.
 - `scripts/initialize-factory-project.ps1`: applies the initial project identity to a repository created from this baseline and skips README reshaping when a repo already uses a project-specific identity header.
+- `scripts/new-factory-task.ps1`: creates a new authoritative JSON task record with a generated Task ID.
+- `scripts/update-factory-task.ps1`: updates the authoritative JSON task record safely.
+- `scripts/get-factory-task-summary.ps1`: prints an operational summary for one task record.
+- `scripts/select-factory-model.ps1`: picks the preferred or next fallback model for a role from the tracked routing source.
 - `.trae-local/mcp/project-fs/package.json` and `package-lock.json`: tracked dependency manifests required to recreate the local MCP install.
 - `.gitignore`: excludes machine-local files and install outputs from Git.
 
@@ -77,8 +117,10 @@ Note: `.trae-local/mcp/project-fs/package.json` and `package-lock.json` are trac
 1. Clone the repository.
 2. Open the repository in Trae.
 3. Enable Project MCP in Trae settings for this workspace if it is not already enabled.
-4. Create or verify the `Coder` and `CodeReviewer` custom agents from `.trae/agent-specs.md` if they are not already available in your Trae account.
-5. Run the single bootstrap entrypoint:
+4. If you want native project subagents, enable the Subagents Directory feature in Trae and let the workspace load `.trae/agents/`.
+5. Prefer the native project subagents under `.trae/agents/` when Trae exposes them in the workspace.
+6. Create or verify the `Coder` and `CodeReviewer` custom agents from `.trae/agent-specs.md` only when native project subagents are unavailable or you still need the manual fallback.
+7. Run the single bootstrap entrypoint:
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File .\scripts\bootstrap-factory.ps1
@@ -101,6 +143,12 @@ powershell -ExecutionPolicy Bypass -File .\scripts\bootstrap-factory.ps1 -CheckO
 Note: if Trae's local toolhost prints extra PowerShell execution-policy noise
 after the success lines above, treat the bootstrap as successful as long as the
 explicit factory success messages were printed.
+
+Truth note:
+
+- Built-in `coder` and `code-reviewer` are the most reliable verified runtime-callable specialist roles in this environment.
+- Repository-defined `.trae/agents/*` are useful tracked implementations, but should not be claimed as runtime-callable unless that behavior is verified in the active workspace.
+- Repository-backed task JSON is a durable workaround, not native Trae runtime state.
 
 ## Starting a New Project From This Baseline
 
@@ -145,6 +193,21 @@ powershell -ExecutionPolicy Bypass -File .\scripts\initialize-factory-project.ps
 Applies the initial repository identity to `README.md` and `.trae/current-project-state.md` for a new project created from this baseline.
 
 ```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\new-factory-task.ps1 -Objective "Upgrade factory baseline"
+```
+Creates a persistent JSON task record under `.trae/factory/tasks/` from the tracked template.
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\select-factory-model.ps1 -Role coder_implementer
+```
+Selects the preferred or next fallback model for one role from the tracked routing config.
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\get-factory-task-summary.ps1 -TaskPath ".trae\factory\tasks\task-id.json"
+```
+Prints a concise operational summary for one task record.
+
+```powershell
 git status
 ```
 Shows tracked, modified, and untracked files before sync, staging, or review.
@@ -164,11 +227,12 @@ Runs the small Python proof-of-concept test, if Python and `pytest` are availabl
 
 1. Pull or sync the current branch from GitHub when it is safe to do so.
 2. Run the bootstrap command on a new machine, or rerun it if local MCP dependencies are missing.
-3. Make sure the required custom agents are present and aligned with `.trae/agent-specs.md`.
-4. Work through the required flow: Research -> Plan -> Implement -> Review -> Test -> Human approval.
-5. Run the relevant checks for the files you changed.
-6. Review `git status` and stage only the intended files.
-7. Commit, push, merge, or deploy only when the human explicitly approves.
+3. Prefer the native project subagents under `.trae/agents/`; use `.trae/agent-specs.md` only as the documented manual fallback.
+4. Create or update a task record in `.trae/factory/tasks/` for persistent state when work spans multiple steps.
+5. Work through the required flow: Intake -> Discovery -> Research -> Plan -> Implement -> Review -> Security -> QA/Test -> Human approval.
+6. Run the relevant checks for the files you changed.
+7. Review `git status` and stage only the intended files.
+8. Commit, push, merge, or deploy only when the human explicitly approves.
 
 ## Safety Rules
 
@@ -183,6 +247,8 @@ Runs the small Python proof-of-concept test, if Python and `pytest` are availabl
 - GitHub is the source of truth for the tracked factory baseline across devices.
 - A fresh clone on another machine should only need the tracked files plus the bootstrap command above.
 - `.trae/mcp.json` uses `${workspaceFolder}`, so the workspace can live in different filesystem locations on different machines.
-- Custom agent definitions should be recreated or verified from `.trae/agent-specs.md` when account-level agent state is missing or out of date.
+- Native project subagents travel with the repository; recreate or verify the manual fallback agents from `.trae/agent-specs.md` only when account-level agent state is missing or native support is unavailable.
+- Native project subagent routing still depends on the active Trae workspace supporting the Subagents Directory feature.
+- MCP portability is configuration-level portability; live MCP access remains scoped to the currently active workspace.
 - Commit tracked baseline changes; do not sync local dependency installs or session/debug artifacts.
 - The current bootstrap flow is Windows-first because the local install script resolves `npm.cmd` from PowerShell.
