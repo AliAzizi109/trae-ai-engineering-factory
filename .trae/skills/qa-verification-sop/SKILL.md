@@ -1,49 +1,45 @@
+---
+name: qa-verification-sop
+description: Use this skill after implementation and review to run targeted QA verification, capture concrete evidence, and report a truthful PASS or FAIL.
+---
+
 # QA Verification SOP
 
-## Purpose
+## Description
 
-Use this skill when you need a reusable verification procedure for implementation work. This skill is intentionally repo-agnostic and focuses on how to verify changes, record evidence, and report limits truthfully.
+Use this skill for a reusable, repo-agnostic QA verification procedure. It is intended to validate completed work, record evidence, and communicate verification limits truthfully.
 
 ## When To Use
 
 - After implementation and review are complete
 - When producing a QA or verification verdict
-- When a task needs a repeatable checklist for targeted checks
+- When a task needs a repeatable procedure for targeted checks
 
-## Procedure
+## Instructions
 
-1. Confirm scope
+1. Confirm scope.
    - Restate the requested change and the files that were allowed to change.
    - Note any explicit constraints or prohibited paths before running checks.
 
-2. Pick targeted checks
+2. Pick targeted checks.
    - Prefer the smallest set of commands or manual checks that can validate the requested change.
-   - Choose checks that match the change type: docs, config, code path, tests, or runtime behavior.
+   - Match checks to the change type: docs, config, code path, tests, or runtime behavior.
 
-3. Run verification
+3. Run verification.
    - Execute the selected checks.
-   - Capture concrete evidence: commands, outputs, artifacts, screenshots, or reasoning when no command applies.
+   - Capture concrete evidence: commands, outputs, artifacts, screenshots, or explicit reasoning when no command applies.
 
-4. Evaluate result
+4. Evaluate the result.
    - PASS when the requested change is verified and no blocking issue remains.
    - FAIL only for blocking correctness, safety, security, or regression issues.
    - If a check cannot run, disclose that clearly and mark the coverage gap.
 
-5. Report truthfully
+5. Report truthfully.
    - List what was checked.
    - List what was not checked.
-   - State the verifier path used and any runtime/tooling limitations.
+   - State the verifier path used and any runtime or tooling limitations.
 
-## Checklist
-
-- Scope matches the user request
-- Changed files stay inside the allowed boundary
-- Review findings are resolved or explicitly carried forward
-- Relevant tests/checks were run or explicitly marked not possible
-- Evidence is concrete and reproducible
-- PASS/FAIL reasoning is tied to observed results
-
-## Output Template
+## Output
 
 - Scope:
 - Checks run:
@@ -52,8 +48,8 @@ Use this skill when you need a reusable verification procedure for implementatio
 - Risks or follow-ups:
 - Verdict:
 
-## Guardrails
+## Notes
 
 - Do not claim coverage you did not actually perform.
 - Do not convert missing evidence into a PASS.
-- Do not rely on repo-specific capability tables inside this skill; keep it reusable.
+- Keep this skill reusable and avoid repo-specific capability truth inside it.
