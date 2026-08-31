@@ -1,465 +1,123 @@
 {
-  "schema_version": "2.0",
-  "authoritative_for": "role contracts used by the repository baseline",
-  "truthfulness_contract": {
-    "verified_runtime_definition": "A capability is verified runtime only when it is directly available and proven callable in the active Trae environment.",
-    "repository_contract_definition": "A role contract stored in this repository is authoritative for process and state, but not proof of runtime-callable repo agents.",
-    "current_environment_note": "Repository-defined .trae/agents and repo role names are not asserted here as runtime-callable native agents unless a human verifies that behavior in the active Trae workspace."
-  },
+  "schema_version": "2.1",
+  "authoritative_for": "lean role metadata used by the repository baseline",
   "roles": {
     "chief_orchestrator": {
-      "purpose": "Own the end-to-end workflow, choose the next role, and stop for human approval at the required gate.",
-      "trigger": [
-        "A new task is created",
-        "A prior role finishes and records outputs",
-        "A blocker or escalation event is added"
-      ],
-      "inputs": [
-        "task-state JSON",
-        "model-routing.json",
-        "role-system.json",
-        "handoffs.json",
-        "repository context"
-      ],
-      "outputs": [
-        "next role decision",
-        "current phase update",
-        "selected model decision",
-        "handoff event",
-        "approval request when required"
-      ],
-      "allowed_tools": [
-        "read repository files",
-        "non-destructive planning",
-        "task-state scripts",
-        "model selection script"
-      ],
-      "forbidden_tools": [
-        "destructive commands",
-        "deploy",
-        "merge without human approval",
-        "claims about unverified native repo agents"
-      ],
-      "success_criteria": [
-        "Every phase transition is explicit",
-        "Task state remains current",
-        "Human approval is requested before release or destructive actions"
-      ],
-      "failure_behavior": "Record the blocker, try a documented fallback path, and escalate when the contract cannot continue safely.",
-      "escalation": "Escalate to the human when no approved next role, no safe model route, or no safe recovery path remains.",
-      "implementation_classification": {
-        "primary_mode": "orchestrator_managed_phase_contract",
-        "native_trae_verified_runtime": "Only the top-level Trae session may be present; repository role mapping is still managed by this repo contract.",
-        "workaround": "JSON task state and scripts provide durable coordination and recovery.",
-        "limitation": "This file does not prove runtime-callable repository subagents."
-      }
+      "ownership": "repository_contract",
+      "primary_mode": "orchestrator_managed_phase_contract",
+      "runtime_truth_label": "Repository Implementation",
+      "minimal_outputs": [
+        "next_role_decision",
+        "phase_update",
+        "selected_model_decision",
+        "handoff_event",
+        "approval_request"
+      ]
     },
     "planner_architect": {
-      "purpose": "Turn objectives into a concrete implementation plan, scope boundaries, and handoff-ready tasks.",
-      "trigger": [
-        "A task enters research or planning",
-        "Chief requests architecture or sequencing"
-      ],
-      "inputs": [
-        "objective",
-        "scope",
-        "constraints",
-        "findings",
-        "existing repository structure"
-      ],
-      "outputs": [
+      "ownership": "repository_contract",
+      "primary_mode": "orchestrator_managed_phase_contract",
+      "runtime_truth_label": "Repository Implementation",
+      "minimal_outputs": [
         "plan",
-        "task decomposition",
+        "task_decomposition",
         "assumptions",
         "next_automatic_action"
-      ],
-      "allowed_tools": [
-        "read repository files",
-        "planning notes",
-        "task-state scripts"
-      ],
-      "forbidden_tools": [
-        "destructive commands",
-        "release actions",
-        "unreviewed direct production changes"
-      ],
-      "success_criteria": [
-        "Plan is actionable",
-        "Scope and constraints are explicit",
-        "Implementation handoff is clear"
-      ],
-      "failure_behavior": "Record missing information and return the task to chief_orchestrator for clarification or re-planning.",
-      "escalation": "Escalate when the objective or constraints are contradictory or incomplete.",
-      "implementation_classification": {
-        "primary_mode": "orchestrator_managed_phase_contract",
-        "native_trae_verified_runtime": "Not verified as a repo-callable native subagent here.",
-        "workaround": "Planning can be represented through the tracked task-state JSON and docs.",
-        "limitation": "No runtime callability guarantee is implied by this role definition."
-      }
+      ]
     },
     "research_docs": {
-      "purpose": "Gather contextual facts, summarize repository evidence, and draft truthful operational documentation updates.",
-      "trigger": [
-        "Research is needed before planning or implementation",
-        "Documentation updates are explicitly required"
-      ],
-      "inputs": [
-        "target files",
-        "repository state",
-        "task constraints",
-        "existing documentation"
-      ],
-      "outputs": [
-        "fact summary",
-        "documentation deltas",
-        "evidence notes",
+      "ownership": "repository_contract",
+      "primary_mode": "orchestrator_managed_phase_contract",
+      "runtime_truth_label": "Repository Implementation",
+      "minimal_outputs": [
+        "findings",
+        "documentation_deltas",
+        "evidence_notes",
         "limitations"
-      ],
-      "allowed_tools": [
-        "read repository files",
-        "task-state scripts",
-        "documentation editing when explicitly assigned"
-      ],
-      "forbidden_tools": [
-        "destructive commands",
-        "invented runtime claims",
-        "approval bypass"
-      ],
-      "success_criteria": [
-        "Facts are traceable to repository evidence",
-        "Documentation is truthful about runtime support",
-        "Assumptions are explicit"
-      ],
-      "failure_behavior": "Record uncertainty as a limitation instead of implying unsupported behavior.",
-      "escalation": "Escalate when a required claim cannot be proven from the repository or active environment.",
-      "implementation_classification": {
-        "primary_mode": "orchestrator_managed_phase_contract",
-        "native_trae_verified_runtime": "Not verified as a repo-callable native subagent here.",
-        "workaround": "Repository docs and JSON state preserve research outcomes between sessions.",
-        "limitation": "This role cannot make unsupported claims about runtime agent support."
-      }
+      ]
     },
     "coder_implementer": {
-      "purpose": "Make the requested repository changes within scope and preserve current worktree intent.",
-      "trigger": [
-        "An approved implementation step is ready",
-        "A review failure requires a precise fix"
-      ],
-      "inputs": [
-        "implementation plan",
-        "review findings",
-        "target files",
-        "constraints"
-      ],
-      "outputs": [
-        "scoped code changes",
-        "updated task state",
-        "implementation notes"
-      ],
-      "allowed_tools": [
-        "read repository files",
-        "apply_patch edits",
-        "task-state scripts",
-        "non-destructive checks"
-      ],
-      "forbidden_tools": [
-        "destructive commands",
-        "deploy",
-        "out-of-scope edits"
-      ],
-      "success_criteria": [
-        "Changes stay inside scope",
-        "Files are read before modification",
-        "Error handling and documentation remain adequate"
-      ],
-      "failure_behavior": "Stop at the first unsafe ambiguity, record it, and return control for clarification or review.",
-      "escalation": "Escalate when requested changes conflict with current worktree state or cannot be completed safely.",
-      "implementation_classification": {
-        "primary_mode": "orchestrator_managed_phase_contract",
-        "native_trae_verified_runtime": "Not verified as a repo-callable native subagent here.",
-        "workaround": "The repository uses scripts and task-state records to coordinate implementation state.",
-        "limitation": "This contract does not prove runtime execution through repo-defined agents."
-      }
+      "ownership": "repository_contract",
+      "primary_mode": "orchestrator_managed_phase_contract",
+      "runtime_truth_label": "Repository Implementation",
+      "minimal_outputs": [
+        "changed_files",
+        "implementation_notes",
+        "task_state_update"
+      ]
     },
     "code_reviewer": {
-      "purpose": "Perform read-only implementation review for correctness, maintainability, and obvious defects.",
-      "trigger": [
-        "Implementation finishes",
-        "A re-review is required after fixes"
-      ],
-      "inputs": [
-        "changed files",
-        "task objective",
-        "review checklist",
-        "implementation notes"
-      ],
-      "outputs": [
-        "PASS or FAIL verdict",
-        "actionable findings",
-        "review summary"
-      ],
-      "allowed_tools": [
-        "read repository files",
-        "diff inspection",
-        "task-state scripts"
-      ],
-      "forbidden_tools": [
-        "editing target files",
-        "destructive commands",
-        "unsupported runtime claims"
-      ],
-      "success_criteria": [
-        "Verdict matches inspected evidence",
-        "High-severity issues are explicit",
-        "Low-severity notes do not block completion"
-      ],
-      "failure_behavior": "Return FAIL with exact required fixes instead of vague commentary.",
-      "escalation": "Escalate when review cannot be completed independently with the available evidence.",
-      "implementation_classification": {
-        "primary_mode": "orchestrator_managed_phase_contract",
-        "native_trae_verified_runtime": "Not verified as a repo-callable native subagent here.",
-        "workaround": "Review outcomes can be stored in JSON state even when native review agents are unavailable.",
-        "limitation": "A repo file or name alone is not proof of native review runtime support."
-      }
+      "ownership": "repository_contract",
+      "primary_mode": "orchestrator_managed_phase_contract",
+      "runtime_truth_label": "Repository Implementation",
+      "minimal_outputs": [
+        "review_result",
+        "findings",
+        "review_summary"
+      ]
     },
     "security_reviewer": {
+      "ownership": "repository_contract",
+      "primary_mode": "orchestrator_managed_phase_contract",
+      "runtime_truth_label": "Repository Implementation",
       "runtime_execution": {
-        "decision": "convert_now",
-        "classification": "Verified Runtime",
+        "truth_label": "Verified Runtime",
         "agent_type": "code-reviewer",
-        "model": "from model-routing.json for Security",
-        "invocation_path": "chief_orchestrator -> security_reviewer contract -> built-in code-reviewer",
-        "expected_outputs": [
-          "security_result",
-          "risk notes",
-          "required mitigations"
-        ],
-        "fallback_behavior": "If the verified runtime path is unavailable, run a second security-scoped CodeReviewer pass and disclose the fallback explicitly.",
-        "enforcement_note": "Read-only behavior is enforced by the code-reviewer runtime contract; do not claim repository-defined .trae/agents files are runtime-callable proof."
+        "model_route_role": "security_reviewer"
       },
-      "purpose": "Perform a focused security pass for obvious unsafe behavior, secrets exposure, and unsafe operational assumptions.",
-      "trigger": [
-        "Implementation reaches security review",
-        "A change touches sensitive workflow or runtime assumptions"
-      ],
-      "inputs": [
-        "changed files",
-        "configuration changes",
-        "review findings",
-        "task constraints"
-      ],
-      "outputs": [
-        "security verdict",
-        "required mitigations",
-        "residual risk notes"
-      ],
-      "allowed_tools": [
-        "read repository files",
-        "config inspection",
-        "task-state scripts"
-      ],
-      "forbidden_tools": [
-        "editing target files",
-        "destructive commands",
-        "unsupported security guarantees"
-      ],
-      "success_criteria": [
-        "Security findings are concrete",
-        "Sensitive assumptions are called out",
-        "No false guarantee is documented"
-      ],
-      "failure_behavior": "Return actionable security blockers and require implementation follow-up.",
-      "escalation": "Escalate when security posture depends on runtime capabilities that are not verified.",
-      "implementation_classification": {
-        "primary_mode": "orchestrator_managed_phase_contract",
-        "native_trae_verified_runtime": "Not verified as a repo-callable native subagent here.",
-        "workaround": "Security outcomes are tracked in task-state JSON and handoff events.",
-        "limitation": "Security review cannot certify unavailable runtime controls."
-      }
+      "minimal_outputs": [
+        "security_result",
+        "risk_notes",
+        "required_mitigations"
+      ]
     },
     "qa_test_verifier": {
+      "ownership": "repository_contract",
+      "primary_mode": "orchestrator_managed_phase_contract",
+      "runtime_truth_label": "Repository Implementation",
       "runtime_execution": {
-        "decision": "convert_now",
-        "classification": "Verified Runtime",
+        "truth_label": "Verified Runtime",
         "agent_type": "default",
-        "model": "from model-routing.json for QA / Tests",
-        "invocation_path": "chief_orchestrator -> qa_test_verifier contract -> built-in default under no-edit verification mode",
-        "expected_outputs": [
-          "qa_result",
-          "qa_verification",
-          "verification_summary",
-          "remaining gaps"
-        ],
-        "fallback_behavior": "If the verified runtime path is unavailable, chief_orchestrator performs the same verification-only flow manually and discloses the fallback.",
-        "enforcement_note": "The no-edit rule for QA verification is prompt/policy enforced, not a hard per-role tool sandbox."
+        "model_route_role": "qa_test_verifier",
+        "execution_mode": "verification_only"
       },
-      "purpose": "Check that the requested workflow reached a truthful tested state and record what was or was not verified.",
-      "trigger": [
-        "Review passes or implementation is ready for testing",
-        "A release gate needs verification evidence"
-      ],
-      "inputs": [
-        "changed files",
-        "review results",
-        "security results",
-        "available test evidence"
-      ],
-      "outputs": [
+      "minimal_outputs": [
         "qa_result",
         "qa_verification",
         "verification_summary",
-        "remaining gaps"
-      ],
-      "allowed_tools": [
-        "read repository files",
-        "non-destructive test execution when available",
-        "task-state scripts"
-      ],
-      "forbidden_tools": [
-        "editing target files",
-        "destructive commands",
-        "claiming unrun tests as passed"
-      ],
-      "success_criteria": [
-        "Verification scope is explicit",
-        "Untested areas are marked",
-        "QA result is evidence-based",
-        "Terminal PASS or FAIL includes structured qa_verification evidence",
-        "Blocking checks cannot be skipped and still produce PASS"
-      ],
-      "failure_behavior": "Record unverified checks as gaps and route back for fixes or human decision.",
-      "escalation": "Escalate when required test evidence cannot be produced in the current environment.",
-      "implementation_classification": {
-        "primary_mode": "orchestrator_managed_phase_contract",
-        "native_trae_verified_runtime": "Not verified as a repo-callable native subagent here.",
-        "workaround": "QA evidence is preserved in the JSON task log even without native test-role execution.",
-        "limitation": "This role cannot convert missing evidence into a pass."
-      }
+        "remaining_gaps"
+      ]
     },
     "git_release_gatekeeper": {
-      "purpose": "Hold the release or handoff gate until review, security, QA, and human approval requirements are satisfied.",
-      "trigger": [
-        "Task enters release or final approval gating",
-        "A human requests release readiness status"
-      ],
-      "inputs": [
-        "review_result",
-        "security_result",
-        "qa_result",
-        "verification_summary",
-        "human approval state"
-      ],
-      "outputs": [
-        "go or no-go recommendation",
-        "missing gate list",
-        "final outcome recommendation"
-      ],
-      "allowed_tools": [
-        "read repository files",
-        "task-state scripts",
-        "summary reporting"
-      ],
-      "forbidden_tools": [
-        "merge without human approval",
-        "deploy",
-        "destructive commands"
-      ],
-      "success_criteria": [
-        "Gate decision is traceable to recorded evidence",
-        "Human approval remains explicit",
-        "No missing blocker is hidden"
-      ],
-      "failure_behavior": "Return no-go with the exact missing approval or verification item.",
-      "escalation": "Escalate to the human when policy requires a manual decision.",
-      "implementation_classification": {
-        "primary_mode": "orchestrator_managed_phase_contract",
-        "native_trae_verified_runtime": "Not verified as a repo-callable native subagent here.",
-        "workaround": "Gatekeeping is represented as repository state plus human approval checkpoints.",
-        "limitation": "This role does not itself perform native git or release operations."
-      }
+      "ownership": "repository_contract",
+      "primary_mode": "orchestrator_managed_phase_contract",
+      "runtime_truth_label": "Repository Implementation",
+      "minimal_outputs": [
+        "go_or_no_go",
+        "missing_gate_items",
+        "final_recommendation"
+      ]
     },
     "task_state_coordinator": {
-      "purpose": "Keep the authoritative task-state JSON consistent, append events, and preserve recovery context between sessions.",
-      "trigger": [
-        "A task is created",
-        "A phase changes",
-        "A model fallback, review result, or blocker must be recorded"
-      ],
-      "inputs": [
-        "task-state template",
-        "handoff outputs",
-        "verification evidence",
-        "selected model result"
-      ],
-      "outputs": [
-        "updated task-state JSON",
-        "execution log entries",
+      "ownership": "repository_implementation",
+      "primary_mode": "repository_implementation",
+      "runtime_truth_label": "Repository Implementation",
+      "minimal_outputs": [
+        "updated_task_state",
+        "execution_log_entries",
         "events",
-        "model attempts"
-      ],
-      "allowed_tools": [
-        "task-state scripts",
-        "read repository files",
-        "non-destructive file writes"
-      ],
-      "forbidden_tools": [
-        "destructive commands",
-        "scope changes without chief approval",
-        "unsupported runtime claims"
-      ],
-      "success_criteria": [
-        "Task JSON remains parseable",
-        "Required fields stay present",
-        "Recovery context is preserved"
-      ],
-      "failure_behavior": "Fail closed, keep the last valid JSON, and report the exact field or path problem.",
-      "escalation": "Escalate when the task record becomes ambiguous or cannot be updated safely.",
-      "implementation_classification": {
-        "primary_mode": "repository_implementation",
-        "native_trae_verified_runtime": "The repository scripts are tracked artifacts, not proof of native runtime role execution.",
-        "workaround": "This role is implemented through JSON templates and PowerShell scripts.",
-        "limitation": "State coordination is file-based and depends on explicit script use."
-      }
+        "model_attempts"
+      ]
     },
     "lightweight_routine": {
-      "purpose": "Handle low-risk structured routine tasks such as small summaries, rote updates, or lightweight routing support.",
-      "trigger": [
-        "A routine low-risk action is requested",
-        "A faster low-cost fallback path is acceptable"
-      ],
-      "inputs": [
-        "small scoped request",
-        "task-state context",
-        "existing repository facts"
-      ],
-      "outputs": [
-        "small structured update",
-        "summary note",
-        "escalation back to a heavier role when needed"
-      ],
-      "allowed_tools": [
-        "read repository files",
-        "task-state scripts",
-        "small non-destructive updates"
-      ],
-      "forbidden_tools": [
-        "destructive commands",
-        "broad architectural changes",
-        "high-risk approvals"
-      ],
-      "success_criteria": [
-        "Task remains low-risk",
-        "Output is concise and accurate",
-        "Escalation happens when the task stops being routine"
-      ],
-      "failure_behavior": "Stop and hand off to chief_orchestrator or planner_architect when complexity increases.",
-      "escalation": "Escalate when changes affect architecture, security, or release decisions.",
-      "implementation_classification": {
-        "primary_mode": "orchestrator_managed_phase_contract",
-        "native_trae_verified_runtime": "Not verified as a repo-callable native subagent here.",
-        "workaround": "Routine work can be represented through the same repo task-state system.",
-        "limitation": "This role is intentionally not a high-risk decision maker."
-      }
+      "ownership": "repository_contract",
+      "primary_mode": "orchestrator_managed_phase_contract",
+      "runtime_truth_label": "Repository Implementation",
+      "minimal_outputs": [
+        "small_structured_update",
+        "summary_note",
+        "escalation_note"
+      ]
     }
   }
 }

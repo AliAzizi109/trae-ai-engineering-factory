@@ -14,11 +14,9 @@ param(
     [string]$Priority,
 
     [Parameter()]
-    [ValidateSet('intake', 'discovery', 'research', 'plan', 'implement', 'review', 'security_review', 'qa', 'release_gate', 'human_approval')]
     [string]$CurrentPhase,
 
     [Parameter()]
-    [ValidateSet('chief_orchestrator', 'planner_architect', 'research_docs', 'coder_implementer', 'code_reviewer', 'security_reviewer', 'qa_test_verifier', 'git_release_gatekeeper', 'task_state_coordinator', 'lightweight_routine')]
     [string]$CurrentRole,
 
     [Parameter()]
@@ -538,12 +536,15 @@ function Get-TaskStateContract {
     $handoffs = Read-JsonHashtable -Path $handoffsPath -Description 'Factory handoff contract'
     $roleSystem = Read-JsonHashtable -Path $roleSystemPath -Description 'Factory role contract'
 
-    if ($handoffs.Contains('phase_sequence') -and $null -ne $handoffs.phase_sequence) {
-        $phases = @($handoffs.phase_sequence | ForEach-Object { [string]$_ })
+    if (-not $handoffs.Contains('phase_sequence') -or $null -eq $handoffs.phase_sequence) {
+        throw "Factory handoff contract does not define phase_sequence: $handoffsPath"
     }
-    else {
-        $phases = @('intake', 'discovery', 'research', 'plan', 'implement', 'review', 'security_review', 'qa', 'release_gate', 'human_approval')
+
+    if (-not $roleSystem.Contains('roles') -or $null -eq $roleSystem.roles) {
+        throw "Factory role contract does not define roles: $roleSystemPath"
     }
+
+    $phases = @($handoffs.phase_sequence | ForEach-Object { [string]$_ })
     $roles = @($roleSystem.roles.Keys | ForEach-Object { [string]$_ })
 
     if ($phases.Count -eq 0) {

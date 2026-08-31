@@ -1,31 +1,27 @@
 # Verification Matrix
 
-## Capability Matrix
+## Repo-Specific Capability Truth
 
-| Capability | Status | Evidence source | Notes |
+| Capability | Truth Label | Evidence source | Notes |
 | --- | --- | --- | --- |
-| Built-in Agent orchestration | Supported but limited | Official Trae docs + runtime use of delegated agents in this environment | Native in Trae, but direct end-to-end UI automation is outside this API surface. |
-| Native project subagents | Supported but limited | Official Trae docs | Requires Subagents Directory feature in the active Trae workspace. |
-| Manual fallback agents (`Coder`, `CodeReviewer`) | Confirmed | Existing baseline files + prior runtime reviews | Account-level setup is still manual when native subagents are unavailable. |
-| Independent review verdicts | Confirmed | Runtime `code-reviewer` smoke tests and prior reviews | Blocking findings return `FAIL`, clean scope returns `PASS`. |
-| Least-privilege review tools | Confirmed | Runtime tool registry + repository subagent frontmatter | Prompt rules alone are not treated as hard security boundaries. |
-| Project-scoped MCP configuration | Confirmed | Tracked `.trae/mcp.json` + runtime `project-fs` read test | Runtime access stays bound to the active workspace. |
-| Persistent task state | Workaround | Repository-tracked JSON task files under `.trae/factory/tasks/` | Not a native Trae state store, but durable across sessions and devices through Git. |
-| Windows sandbox isolation | Not available | Official Trae security blog | Windows support is still limited compared with macOS / remote Linux. |
+| Built-in Agent orchestration | `Native Trae` | Official Trae docs + runtime use in this environment | Native product capability, bounded by the active runtime surface. |
+| Native project subagents | `Native Trae` | Official Trae docs | Native when the active workspace exposes the Subagents Directory feature. |
+| Manual fallback agents (`Coder`, `CodeReviewer`) | `Workaround` | `.trae/agent-specs.md` + prior runtime use | Account-level or manual fallback; treat as `Verified Runtime` only when current-environment evidence is explicit. |
+| Independent review verdicts | `Verified Runtime` | Runtime `code-reviewer` smoke tests and prior reviews | Clean scopes return `PASS`; blocking findings return `FAIL`. |
+| Least-privilege review tools | `Repository Implementation` | Repository subagent prompts + runtime tool registry context | Useful scope control, but not a hard sandbox guarantee by itself. |
+| Project-scoped MCP configuration | `Repository Implementation` | Tracked `.trae/mcp.json` | Portable tracked config is not the same as live workspace binding. |
+| Persistent task state | `Workaround` | Repository-tracked JSON task files under `.trae/factory/tasks/` | Durable across sessions and devices through Git, but not native Trae durable state. |
+| Windows sandbox isolation | `Limitation` | Official Trae security notes | No safe native Windows sandbox guarantee is claimed here. |
 
-## Notes
+## Repo-Specific Notes
 
-- Native project subagents are preferred when Trae supports them in the repository.
-- `Coder` and `CodeReviewer` remain supported as manual fallback agents.
-- Built-in `coder` and `code-reviewer` are the most reliable verified runtime-callable specialist roles in this environment.
-- Verification scope should stay limited to the files changed for the current task.
-- Mark each test with concrete evidence instead of implied success.
-- QA terminal verdicts should include structured `qa_verification` evidence:
-  blocking checks, advisory checks, passed, failed, skipped, not-possible,
-  commands, artifacts, invocation path, and evidence sufficiency.
+- Prefer native project subagents when the active workspace supports them.
+- Keep `.trae/agent-specs.md` as documented manual fallback only.
+- Use the QA verification skill under `.trae/skills/qa-verification-sop/` for reusable verification procedure and checklist guidance.
+- Keep capability claims tied to observed runtime evidence, not only to tracked repository files.
 
-## Test Results Template
+## Evidence Record Template
 
 | Task ID | Scope | Reviewer result | Security result | QA result | Commands / evidence | Remaining gaps |
 | --- | --- | --- | --- | --- | --- | --- |
-| TASK-YYYYMMDD-HHMMSS | Updated files | PASS / FAIL | PASS / FAIL / N/A | PASS / FAIL / N/A | List exact checks and runtime evidence | List unresolved items |
+| TASK-YYYYMMDD-HHMMSS | Updated files | PASS / FAIL | PASS / FAIL / N/A | PASS / FAIL / N/A | Exact checks and artifacts | Explicit residual gaps |

@@ -11,11 +11,12 @@ remaining candidates, and the next fallback candidate if the chosen model fails.
 [CmdletBinding()]
 param(
     [Parameter(Mandatory = $true)]
-    [ValidateSet('chief_orchestrator', 'planner_architect', 'research_docs', 'coder_implementer', 'code_reviewer', 'security_reviewer', 'qa_test_verifier', 'git_release_gatekeeper', 'task_state_coordinator', 'lightweight_routine')]
+    [ValidateNotNullOrEmpty()]
     [string]$Role,
 
     [Parameter()]
     [Alias('FailedModels')]
+    [AllowEmptyCollection()]
     [string[]]$FailedModel = @()
 )
 
@@ -126,6 +127,7 @@ function Get-SelectionReason {
         [string]$PreferredModel,
 
         [Parameter(Mandatory = $true)]
+        [AllowEmptyCollection()]
         [string[]]$FailedModels
     )
 

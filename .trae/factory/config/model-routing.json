@@ -1,7 +1,6 @@
 {
-  "schema_version": "factory-model-routing-v2",
+  "schema_version": "factory-model-routing-v2.1",
   "source_of_truth": "repository",
-  "last_updated": "2026-08-30",
   "selection_contract": {
     "mode": "orchestrator_managed_phase_contract",
     "algorithm": "Use the preferred model first, then select the first fallback not listed in failed_models.",
@@ -21,110 +20,70 @@
       "fallback_models": [
         "GPT-5.2",
         "Gemini-3.1-Pro-Preview"
-      ],
-      "implementation_classification": {
-        "declared_contract": "orchestrator_managed_phase_contract",
-        "runtime_status": "routing intent only; no runtime guarantee is asserted here"
-      }
+      ]
     },
     "planner_architect": {
       "preferred_model": "GPT-5.4",
       "fallback_models": [
         "GPT-5.2",
         "Gemini-3.1-Pro-Preview"
-      ],
-      "implementation_classification": {
-        "declared_contract": "orchestrator_managed_phase_contract",
-        "runtime_status": "routing intent only; no runtime guarantee is asserted here"
-      }
+      ]
     },
     "research_docs": {
       "preferred_model": "Gemini-3-Flash-Preview",
       "fallback_models": [
         "GPT-5.4",
         "Seed-2.1-Turbo"
-      ],
-      "implementation_classification": {
-        "declared_contract": "orchestrator_managed_phase_contract",
-        "runtime_status": "routing intent only; no runtime guarantee is asserted here"
-      }
+      ]
     },
     "coder_implementer": {
       "preferred_model": "Kimi-K2.5",
       "fallback_models": [
         "GPT-5.4",
         "GPT-5.2"
-      ],
-      "implementation_classification": {
-        "declared_contract": "orchestrator_managed_phase_contract",
-        "runtime_status": "routing intent only; no runtime guarantee is asserted here"
-      }
+      ]
     },
     "code_reviewer": {
       "preferred_model": "Gemini-3.1-Pro-Preview",
       "fallback_models": [
         "GPT-5.4",
         "GPT-5.2"
-      ],
-      "implementation_classification": {
-        "declared_contract": "orchestrator_managed_phase_contract",
-        "runtime_status": "routing intent only; no runtime guarantee is asserted here"
-      }
+      ]
     },
     "security_reviewer": {
       "preferred_model": "Gemini-3.1-Pro-Preview",
       "fallback_models": [
         "GPT-5.4",
         "GPT-5.2"
-      ],
-      "implementation_classification": {
-        "declared_contract": "orchestrator_managed_phase_contract",
-        "runtime_status": "routing intent only; no runtime guarantee is asserted here"
-      }
+      ]
     },
     "qa_test_verifier": {
       "preferred_model": "GPT-5.2",
       "fallback_models": [
         "GPT-5.4",
         "Gemini-3.1-Pro-Preview"
-      ],
-      "implementation_classification": {
-        "declared_contract": "orchestrator_managed_phase_contract",
-        "runtime_status": "routing intent only; no runtime guarantee is asserted here"
-      }
+      ]
     },
     "git_release_gatekeeper": {
       "preferred_model": "GPT-5.4",
       "fallback_models": [
         "GPT-5.2",
         "Gemini-3.1-Pro-Preview"
-      ],
-      "implementation_classification": {
-        "declared_contract": "orchestrator_managed_phase_contract",
-        "runtime_status": "routing intent only; no runtime guarantee is asserted here"
-      }
+      ]
     },
     "task_state_coordinator": {
       "preferred_model": "GPT-5.2",
       "fallback_models": [
         "Seed-2.1-Turbo",
         "GPT-5.4"
-      ],
-      "implementation_classification": {
-        "declared_contract": "repository_implementation",
-        "runtime_status": "routing intent only; no runtime guarantee is asserted here"
-      }
+      ]
     },
     "lightweight_routine": {
       "preferred_model": "Seed-2.1-Turbo",
       "fallback_models": [
         "Gemini-3-Flash-Preview",
         "GPT-5.2"
-      ],
-      "implementation_classification": {
-        "declared_contract": "orchestrator_managed_phase_contract",
-        "runtime_status": "routing intent only; no runtime guarantee is asserted here"
-      }
+      ]
     }
   }
 }

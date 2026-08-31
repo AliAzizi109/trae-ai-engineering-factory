@@ -24,11 +24,9 @@ param(
     [string]$Priority = 'medium',
 
     [Parameter()]
-    [ValidateSet('research', 'plan', 'implement', 'review', 'security_review', 'qa', 'release_gate', 'human_approval')]
     [string]$CurrentPhase = 'research',
 
     [Parameter()]
-    [ValidateSet('chief_orchestrator', 'planner_architect', 'research_docs', 'coder_implementer', 'code_reviewer', 'security_reviewer', 'qa_test_verifier', 'git_release_gatekeeper', 'task_state_coordinator', 'lightweight_routine')]
     [string]$CurrentRole = 'chief_orchestrator',
 
     [Parameter()]
@@ -47,6 +45,12 @@ param(
 
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
+
+$sharedHelperPath = Join-Path -Path $PSScriptRoot -ChildPath 'factory-task-config-helpers.ps1'
+if (-not (Test-Path -LiteralPath $sharedHelperPath -PathType Leaf)) {
+    throw "Required shared helper script not found: $sharedHelperPath"
+}
+. $sharedHelperPath
 
 function Get-ProjectRoot {
     <#
@@ -274,6 +278,15 @@ function Main {
     )
 
     $projectRoot = Get-ProjectRoot
+    $roleSystemPath = Get-FactoryPath -ProjectRoot $projectRoot -RelativePath '.trae\factory\config\role-system.json'
+    $handoffsPath = Get-FactoryPath -ProjectRoot $projectRoot -RelativePath '.trae\factory\config\handoffs.json'
+    $roleSystem = Read-JsonHashtable -Path $roleSystemPath
+    $handoffs = Read-JsonHashtable -Path $handoffsPath
+    $allowedRoles = @($roleSystem.roles.Keys | ForEach-Object { [string]$_ })
+    $allowedCreationPhases = @(Get-AllowedCreationPhases -HandoffConfig $handoffs)
+
+    Assert-ConfigDefinedValue -FieldName 'CurrentRole' -Value $TaskRole -AllowedValues $allowedRoles -SourcePath $roleSystemPath
+    Assert-ConfigDefinedValue -FieldName 'CurrentPhase' -Value $TaskPhase -AllowedValues $allowedCreationPhases -SourcePath $handoffsPath
 
     if ($IsCheckOnly) {
         Write-Host 'Start-factory-task check passed.'

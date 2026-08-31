@@ -1,7 +1,5 @@
 {
-  "schema_version": "factory-handoffs-v2",
-  "last_updated": "2026-08-30",
-  "truthfulness_note": "These handoffs are repository contracts. They document intended sequencing and required state transitions, not guaranteed native runtime automation in the active Trae environment.",
+  "schema_version": "factory-handoffs-v2.1",
   "phase_sequence": [
     "intake",
     "discovery",
@@ -18,11 +16,10 @@
     {
       "from_role": "chief_orchestrator",
       "to_role": "chief_orchestrator",
-      "when": "A new task is opened and intake details must be normalized before repository discovery begins.",
       "required_inputs": [
         "task_id",
         "objective",
-        "initial request",
+        "initial_request",
         "constraints",
         "priority"
       ],
@@ -33,23 +30,21 @@
         "next_automatic_action": "Confirm scope, assumptions, and discovery targets before research handoff."
       },
       "expected_outputs": [
-        "normalized objective",
-        "scoped request",
-        "discovery targets"
-      ],
-      "escalation_on_failure": "Pause and request missing intake details from the human."
+        "normalized_objective",
+        "scoped_request",
+        "discovery_targets"
+      ]
     },
     {
       "from_role": "chief_orchestrator",
       "to_role": "research_docs",
-      "when": "Discovery clarifies the task scope and repository evidence collection must begin.",
       "required_inputs": [
         "task_id",
         "objective",
         "scope",
         "constraints",
         "priority",
-        "discovery notes"
+        "discovery_notes"
       ],
       "required_state_updates": {
         "current_phase": "research",
@@ -60,14 +55,12 @@
       "expected_outputs": [
         "findings",
         "constraints",
-        "relevant docs and code references"
-      ],
-      "escalation_on_failure": "Return to chief_orchestrator with blocker and clarification request."
+        "relevant_docs_and_code_references"
+      ]
     },
     {
       "from_role": "chief_orchestrator",
       "to_role": "research_docs",
-      "when": "Additional repository evidence is needed during research before planning can continue.",
       "required_inputs": [
         "task_id",
         "objective",
@@ -84,20 +77,18 @@
       "expected_outputs": [
         "findings",
         "constraints",
-        "relevant docs and code references"
-      ],
-      "escalation_on_failure": "Return to chief_orchestrator with blocker and clarification request."
+        "relevant_docs_and_code_references"
+      ]
     },
     {
       "from_role": "research_docs",
       "to_role": "planner_architect",
-      "when": "Repository evidence is sufficient and the task needs an actionable plan.",
       "required_inputs": [
         "objective",
         "scope",
         "constraints",
-        "current findings",
-        "runtime limitations"
+        "current_findings",
+        "runtime_limitations"
       ],
       "required_state_updates": {
         "current_phase": "plan",
@@ -107,19 +98,17 @@
       "expected_outputs": [
         "plan",
         "assumptions",
-        "next implementation step"
-      ],
-      "escalation_on_failure": "Record uncertainty explicitly and return to chief_orchestrator."
+        "next_implementation_step"
+      ]
     },
     {
       "from_role": "planner_architect",
       "to_role": "coder_implementer",
-      "when": "The implementation plan is approved and the task is ready for scoped changes.",
       "required_inputs": [
         "plan",
-        "target files",
+        "target_files",
         "constraints",
-        "review expectations"
+        "review_expectations"
       ],
       "required_state_updates": {
         "current_phase": "implement",
@@ -127,21 +116,19 @@
         "next_automatic_action": "Implement only the approved scoped changes."
       },
       "expected_outputs": [
-        "changed files",
-        "implementation notes",
-        "execution_log entries"
-      ],
-      "escalation_on_failure": "Return blocker details to chief_orchestrator."
+        "changed_files",
+        "implementation_notes",
+        "execution_log_entries"
+      ]
     },
     {
       "from_role": "coder_implementer",
       "to_role": "code_reviewer",
-      "when": "Scoped implementation completes and a read-only review is required.",
       "required_inputs": [
-        "changed files",
+        "changed_files",
         "objective",
         "constraints",
-        "implementation notes"
+        "implementation_notes"
       ],
       "required_state_updates": {
         "current_phase": "review",
@@ -152,19 +139,16 @@
       "expected_outputs": [
         "review_result",
         "findings",
-        "required fixes or PASS"
-      ],
-      "escalation_on_failure": "Return exact review blockers to coder_implementer."
+        "required_fixes_or_pass"
+      ]
     },
     {
       "from_role": "code_reviewer",
       "to_role": "security_reviewer",
-      "when": "Code review passes or security review is explicitly required.",
-      "verified_runtime_invocation": "Invoke the security_reviewer contract through the verified runtime built-in agent type `code-reviewer` using the model selected by model-routing.json for Security.",
       "required_inputs": [
         "review_result",
-        "changed files",
-        "configuration changes"
+        "changed_files",
+        "configuration_changes"
       ],
       "required_state_updates": {
         "current_phase": "security_review",
@@ -174,22 +158,18 @@
       },
       "expected_outputs": [
         "security_result",
-        "risk notes",
-        "required mitigations"
-      ],
-      "fallback_behavior": "If the verified runtime path is unavailable, run a second security-scoped CodeReviewer pass and disclose that fallback explicitly.",
-      "escalation_on_failure": "Return exact security blockers to coder_implementer and chief_orchestrator."
+        "risk_notes",
+        "required_mitigations"
+      ]
     },
     {
       "from_role": "security_reviewer",
       "to_role": "qa_test_verifier",
-      "when": "Implementation is review-complete and verification evidence is required.",
-      "verified_runtime_invocation": "Invoke the qa_test_verifier contract through the verified runtime built-in agent type `default` under a strict no-edit, non-destructive verification contract. The no-edit rule is prompt/policy enforced, not a hard per-role sandbox.",
       "required_inputs": [
         "review_result",
         "security_result",
-        "changed files",
-        "available checks"
+        "changed_files",
+        "available_checks"
       ],
       "required_state_updates": {
         "current_phase": "qa",
@@ -201,15 +181,12 @@
         "qa_result",
         "qa_verification",
         "verification_summary",
-        "remaining gaps"
-      ],
-      "fallback_behavior": "If the verified runtime path is unavailable, chief_orchestrator performs the same verification-only flow manually and discloses the fallback.",
-      "escalation_on_failure": "Return failed verification details to chief_orchestrator."
+        "remaining_gaps"
+      ]
     },
     {
       "from_role": "qa_test_verifier",
       "to_role": "git_release_gatekeeper",
-      "when": "Review, security, and QA results are available for gate evaluation.",
       "required_inputs": [
         "review_result",
         "security_result",
@@ -224,19 +201,17 @@
       "expected_outputs": [
         "go_or_no_go",
         "missing_gate_items",
-        "final outcome recommendation"
-      ],
-      "escalation_on_failure": "Return missing gate items to chief_orchestrator and human."
+"final_recommendation"
+      ]
     },
     {
       "from_role": "git_release_gatekeeper",
       "to_role": "chief_orchestrator",
-      "when": "The gate decision is ready for final coordination and human approval handling.",
       "required_inputs": [
         "review_result",
         "security_result",
         "qa_result",
-        "final recommendation"
+        "final_recommendation"
       ],
       "required_state_updates": {
         "current_phase": "human_approval",
@@ -245,21 +220,20 @@
         "next_automatic_action": "Request human approval or stop with a no-go summary."
       },
       "expected_outputs": [
-        "approval request",
-        "final summary",
-        "final_outcome when approved"
-      ],
-      "escalation_on_failure": "Pause and wait for explicit human direction."
+        "approval_request",
+        "final_summary",
+        "final_outcome"
+      ]
     }
   ],
   "event_logging_contract": {
     "append_event_on": [
-      "task creation",
-      "phase transition",
-      "model fallback",
-      "review verdict",
-      "security verdict",
-      "qa verdict",
+      "task_creation",
+      "phase_transition",
+      "model_fallback",
+      "review_verdict",
+      "security_verdict",
+      "qa_verdict",
       "blocker",
       "escalation"
     ],
