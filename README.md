@@ -1,4 +1,4 @@
-# Trae Factory Test
+# Trae AI Engineering Factory
 > Project summary: Reusable Trae-based factory baseline for initializing new repositories with less manual setup.
 
 ## What This Repository Is

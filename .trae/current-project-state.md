@@ -4,7 +4,7 @@ Last updated: 2026-08-30
 
 ## Project Identity
 
-- Name: Trae Factory Test
+- Name: Trae AI Engineering Factory
 - Summary: Reusable Trae-based factory baseline for initializing new repositories with less manual setup.
 
 ## Completed Tasks
