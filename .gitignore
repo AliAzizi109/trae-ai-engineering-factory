@@ -5,3 +5,5 @@
 /chat-*.txt
 /debug-mcp-routing-error.md
 .dbg/
+__pycache__/
+*.py[cod]

@@ -159,7 +159,7 @@ Items that should remain local to a machine or session:
   - `@modelcontextprotocol/server-filesystem`
   - `zod`
 - Git
-- GitHub private repository
+- GitHub public repository intended for general publication
 - Windows
 - PowerShell
 - Node.js / npm
