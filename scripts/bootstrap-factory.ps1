@@ -186,7 +186,7 @@ function Invoke-ProjectFsBootstrap {
     .SYNOPSIS
     Runs the tracked project-fs bootstrap script.
     #>
-    [OutputType([void])]
+    [OutputType([pscustomobject])]
     param(
         [Parameter(Mandatory = $true)]
         [string]$ProjectRoot
@@ -197,7 +197,7 @@ function Invoke-ProjectFsBootstrap {
         throw "Bootstrap script not found at: $bootstrapScriptPath"
     }
 
-    & $bootstrapScriptPath
+    return (& $bootstrapScriptPath)
 }
 
 function Main {
@@ -220,8 +220,27 @@ function Main {
         return
     }
 
-    Invoke-ProjectFsBootstrap -ProjectRoot $projectRoot
-    Write-Host 'Factory bootstrap completed successfully.'
+    $projectFsBootstrapResult = Invoke-ProjectFsBootstrap -ProjectRoot $projectRoot
+
+    if ($null -eq $projectFsBootstrapResult) {
+        throw 'Project-fs bootstrap did not return a result.'
+    }
+
+    switch ([string]$projectFsBootstrapResult.Status) {
+        'ready' {
+            Write-Host 'Factory bootstrap completed successfully.'
+        }
+        'deferred' {
+            $missingList = @($projectFsBootstrapResult.MissingPrerequisites) -join ', '
+            Write-Warning "Factory baseline is ready, but project-fs bootstrap is deferred. Missing prerequisites: $missingList"
+            Write-Host "Remediation: $($projectFsBootstrapResult.Remediation)"
+            Write-Host 'Factory bootstrap completed with deferred optional project-fs setup.'
+        }
+        default {
+            throw "Project-fs bootstrap returned an unsupported status: $($projectFsBootstrapResult.Status)"
+        }
+    }
+
     Write-Host 'Next steps:'
     Write-Host '1. Review git status.'
     Write-Host '2. Start a tracked task quickly with scripts/start-factory-task.ps1, or use scripts/new-factory-task.ps1 directly.'

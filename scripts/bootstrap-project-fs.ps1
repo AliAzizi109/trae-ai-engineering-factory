@@ -30,20 +30,67 @@ function Get-ProjectRoot {
     return $projectRoot
 }
 
-function Get-NpmCommandPath {
+function Get-NodeToolPreflight {
     <#
     .SYNOPSIS
-    Resolves npm.cmd to avoid PowerShell execution policy issues with npm.ps1.
+    Resolves the node/npm commands required for project-fs bootstrap.
     #>
-    [OutputType([string])]
+    [OutputType([pscustomobject])]
     param()
 
-    $npmCommand = Get-Command -Name 'npm.cmd' -ErrorAction Stop
-    if (-not $npmCommand.Source) {
-        throw 'npm.cmd was found, but its executable path could not be resolved.'
+    $nodeCommand = Get-Command -Name 'node' -ErrorAction SilentlyContinue
+    $npmCommand = Get-Command -Name 'npm.cmd' -ErrorAction SilentlyContinue
+    $missingPrerequisites = New-Object System.Collections.Generic.List[string]
+
+    if ($null -eq $nodeCommand -or [string]::IsNullOrWhiteSpace([string]$nodeCommand.Source)) {
+        $missingPrerequisites.Add('node')
     }
 
-    return $npmCommand.Source
+    if ($null -eq $npmCommand -or [string]::IsNullOrWhiteSpace([string]$npmCommand.Source)) {
+        $missingPrerequisites.Add('npm.cmd')
+    }
+
+    return [pscustomobject]@{
+        Ready = $missingPrerequisites.Count -eq 0
+        NodeCommandPath = if ($null -ne $nodeCommand) { [string]$nodeCommand.Source } else { $null }
+        NpmCommandPath = if ($null -ne $npmCommand) { [string]$npmCommand.Source } else { $null }
+        MissingPrerequisites = $missingPrerequisites.ToArray()
+        Remediation = 'Install Node.js so that both node and npm.cmd are available on PATH, then re-run scripts/bootstrap-project-fs.ps1.'
+    }
+}
+
+function Assert-TrackedProjectFsInputs {
+    <#
+    .SYNOPSIS
+    Ensures the tracked project-fs bootstrap inputs exist before installation.
+    #>
+    [OutputType([pscustomobject])]
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$ProjectRoot
+    )
+
+    $installDirectory = Join-Path -Path $ProjectRoot -ChildPath '.trae-local\mcp\project-fs'
+    $packageJsonPath = Join-Path -Path $installDirectory -ChildPath 'package.json'
+    $packageLockPath = Join-Path -Path $installDirectory -ChildPath 'package-lock.json'
+
+    if (-not (Test-Path -LiteralPath $installDirectory -PathType Container)) {
+        throw "Missing tracked project-fs directory at: $installDirectory"
+    }
+
+    if (-not (Test-Path -LiteralPath $packageJsonPath -PathType Leaf)) {
+        throw "Missing tracked package.json at: $packageJsonPath"
+    }
+
+    if (-not (Test-Path -LiteralPath $packageLockPath -PathType Leaf)) {
+        throw "Missing tracked package-lock.json at: $packageLockPath"
+    }
+
+    return [pscustomobject]@{
+        InstallDirectory = $installDirectory
+        PackageJsonPath = $packageJsonPath
+        PackageLockPath = $packageLockPath
+    }
 }
 
 function Install-ProjectFsDependencies {
@@ -53,10 +100,12 @@ function Install-ProjectFsDependencies {
     #>
     param(
         [Parameter(Mandatory = $true)]
-        [string]$InstallDirectory
+        [string]$InstallDirectory,
+
+        [Parameter(Mandatory = $true)]
+        [string]$NpmCommandPath
     )
 
-    $npmCommandPath = Get-NpmCommandPath
     $installArgs = @('ci', '--no-audit', '--no-fund')
     $startProcessParams = @{
         FilePath = $npmCommandPath
@@ -79,27 +128,41 @@ function Main {
     .SYNOPSIS
     Prepares the local project-fs MCP installation.
     #>
-    [OutputType([void])]
+    [OutputType([pscustomobject])]
     param()
 
     $projectRoot = Get-ProjectRoot
-    $installDirectory = Join-Path -Path $projectRoot -ChildPath '.trae-local\mcp\project-fs'
-    $packageJsonPath = Join-Path -Path $installDirectory -ChildPath 'package.json'
-    $packageLockPath = Join-Path -Path $installDirectory -ChildPath 'package-lock.json'
+    $trackedInputs = Assert-TrackedProjectFsInputs -ProjectRoot $projectRoot
+    $preflight = Get-NodeToolPreflight
 
-    New-Item -ItemType Directory -Path $installDirectory -Force | Out-Null
-
-    if (-not (Test-Path -LiteralPath $packageJsonPath -PathType Leaf)) {
-        throw "Missing tracked package.json at: $packageJsonPath"
+    if (-not $preflight.Ready) {
+        $missingList = $preflight.MissingPrerequisites -join ', '
+        Write-Warning "Project-fs bootstrap deferred. Missing prerequisites on PATH: $missingList"
+        Write-Host "Remediation: $($preflight.Remediation)"
+        Write-Host "Deferred script: scripts/bootstrap-project-fs.ps1"
+        return [pscustomobject]@{
+            Status = 'deferred'
+            InstallDirectory = $trackedInputs.InstallDirectory
+            MissingPrerequisites = $preflight.MissingPrerequisites
+            Remediation = $preflight.Remediation
+        }
     }
 
-    if (-not (Test-Path -LiteralPath $packageLockPath -PathType Leaf)) {
-        throw "Missing tracked package-lock.json at: $packageLockPath"
+    Install-ProjectFsDependencies -InstallDirectory $trackedInputs.InstallDirectory -NpmCommandPath $preflight.NpmCommandPath
+
+    Write-Host "Local project-fs MCP dependencies are ready in: $($trackedInputs.InstallDirectory)"
+    return [pscustomobject]@{
+        Status = 'ready'
+        InstallDirectory = $trackedInputs.InstallDirectory
+        NpmCommandPath = $preflight.NpmCommandPath
+        NodeCommandPath = $preflight.NodeCommandPath
     }
-
-    Install-ProjectFsDependencies -InstallDirectory $installDirectory
-
-    Write-Host "Local project-fs MCP dependencies are ready in: $installDirectory"
 }
 
-Main
+try {
+    Main
+}
+catch {
+    Write-Error $_
+    exit 1
+}

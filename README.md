@@ -22,10 +22,15 @@ Start here when working with this baseline:
 
 ## Prerequisites
 
+Mandatory for baseline adoption and daily script usage:
+
 - Windows with PowerShell
 - Git
-- Node.js and npm on `PATH`
 - Trae workspace support
+
+Optional or deferred:
+
+- Node.js and `npm.cmd` on `PATH` only when you want the local project-fs MCP dependencies bootstrapped automatically
 - Python and `pytest` only if you want to run the sample validation test
 
 ## Bootstrap Quickstart
@@ -43,28 +48,79 @@ powershell -ExecutionPolicy Bypass -File .\scripts\bootstrap-factory.ps1 -CheckO
 ```
 
 This validates the tracked baseline and then prepares the local project-fs MCP
-installation when not in check-only mode.
+installation when not in check-only mode. If `node` or `npm.cmd` are missing,
+the baseline remains usable and the project-fs bootstrap is reported as
+deferred with an explicit remediation message.
 
-## Adoption Overview
+## Project Startup Paths
 
-This repository can be used as a baseline for a new project.
+Use one canonical entrypoint for both startup cases:
 
-1. Clone the repository and open it in Trae.
-2. Enable Project MCP for the workspace when needed.
-3. If the active workspace supports native project subagents, let it load
-   `.trae/agents/` and prefer that path.
-4. Use `.trae/agent-specs.md` only when you still need manual fallback setup
-   for `Coder` or `CodeReviewer`.
-5. Initialize the adopter repository identity:
+`scripts/adopt-factory-project.ps1`
+
+### Brand-New Project Startup
+
+Recommended when the target folder is missing or empty and you want the fastest
+template-style start with the factory baseline applied immediately.
+
+Shortest recommended command:
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File .\scripts\initialize-factory-project.ps1 -ProjectName "My Project" -ProjectSummary "Short summary"
+powershell -ExecutionPolicy Bypass -File .\scripts\adopt-factory-project.ps1 -TargetProjectRoot "C:\work\my-new-project" -NewProject
 ```
 
-Preview only:
+New-project startup behavior:
+
+1. Reuses the same baseline sync, project initialization, and optional project-fs bootstrap logic as normal adoption.
+2. Applies immediately by design, so no extra `-Apply` flag is needed.
+3. Requires the target folder to be missing or empty.
+4. Derives `ProjectName` from the target folder name when you do not pass `-ProjectName`.
+5. Accepts optional `-ProjectName`, `-ProjectSummary`, and `-SkipOptionalProjectFsBootstrap`.
+
+Example with explicit identity:
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File .\scripts\initialize-factory-project.ps1 -ProjectName "My Project" -ProjectSummary "Short summary" -CheckOnly
+powershell -ExecutionPolicy Bypass -File .\scripts\adopt-factory-project.ps1 -TargetProjectRoot "C:\work\my-new-project" -NewProject -ProjectName "My New Project" -ProjectSummary "Short summary"
+```
+
+### Existing Or Empty Project Adoption
+
+Recommended when you are adopting into an existing repository, or when you want
+the preview-first path before applying changes.
+
+Shortest recommended preview command:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\adopt-factory-project.ps1 -TargetProjectRoot "C:\work\my-project" -ProjectName "My Project"
+```
+
+That command is check-only by default. It previews:
+
+- baseline files that would be established or updated
+- project-specific files that would be seeded only when missing
+- project identity initialization for `README.md` and `.trae/current-project-state.md`
+- optional project-fs bootstrap follow-up
+
+Apply the adoption non-destructively after review:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\adopt-factory-project.ps1 -TargetProjectRoot "C:\work\my-project" -ProjectName "My Project" -ProjectSummary "Short summary" -Apply
+```
+
+Shared behavior notes:
+
+1. If the target directory does not exist, the apply run creates it safely.
+2. Baseline-managed files are synced non-destructively.
+3. `README.md` and `.trae/current-project-state.md` are seeded only when missing.
+4. Existing adopter-owned `README.md` content is not overwritten silently; the script reports a manual follow-up when automatic identity updates are not safe.
+5. Optional project-fs bootstrap runs during apply mode unless `-SkipOptionalProjectFsBootstrap` is used.
+
+When `node` or `npm.cmd` are absent during apply mode, startup or adoption still
+completes. The final report marks project-fs bootstrap as `deferred` and tells
+the operator to install Node.js so both commands are on `PATH`, then run:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\bootstrap-project-fs.ps1
 ```
 
 ## Operator Quickstart

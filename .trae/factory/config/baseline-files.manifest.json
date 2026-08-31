@@ -1,6 +1,6 @@
 {
   "schema_version": "factory-baseline-manifest-v1",
-  "last_updated": "2026-08-31",
+  "last_updated": "2026-09-01",
   "description": "Authoritative baseline file list for bootstrap validation and safe adopter synchronization.",
   "files": [
     {
@@ -29,6 +29,42 @@
         "category": "baseline",
         "default_mode": "copy_if_different",
         "reason": "Agent contract guidance is baseline-managed."
+      }
+    },
+    {
+      "path": ".trae/commands/factory-audit.md",
+      "bootstrap_required": true,
+      "sync": {
+        "category": "baseline",
+        "default_mode": "copy_if_different",
+        "reason": "Factory command guidance is baseline-managed."
+      }
+    },
+    {
+      "path": ".trae/commands/factory-release-gate.md",
+      "bootstrap_required": true,
+      "sync": {
+        "category": "baseline",
+        "default_mode": "copy_if_different",
+        "reason": "Factory command guidance is baseline-managed."
+      }
+    },
+    {
+      "path": ".trae/commands/factory-review-loop.md",
+      "bootstrap_required": true,
+      "sync": {
+        "category": "baseline",
+        "default_mode": "copy_if_different",
+        "reason": "Factory command guidance is baseline-managed."
+      }
+    },
+    {
+      "path": ".trae/commands/factory-task-summary.md",
+      "bootstrap_required": true,
+      "sync": {
+        "category": "baseline",
+        "default_mode": "copy_if_different",
+        "reason": "Factory command guidance is baseline-managed."
       }
     },
     {
@@ -84,6 +120,24 @@
         "category": "baseline",
         "default_mode": "copy_if_different",
         "reason": "The factory constitution is baseline-managed."
+      }
+    },
+    {
+      "path": ".trae/rules/git-commit-message.md",
+      "bootstrap_required": true,
+      "sync": {
+        "category": "baseline",
+        "default_mode": "copy_if_different",
+        "reason": "Shared git commit message rules are baseline-managed."
+      }
+    },
+    {
+      "path": ".trae/skills/qa-verification-sop/SKILL.md",
+      "bootstrap_required": true,
+      "sync": {
+        "category": "baseline",
+        "default_mode": "copy_if_different",
+        "reason": "QA verification skill guidance is baseline-managed."
       }
     },
     {

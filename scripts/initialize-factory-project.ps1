@@ -1,11 +1,12 @@
 <#
 .SYNOPSIS
-Initializes a new repository created from this factory baseline.
+Initializes factory project identity for the current repository or an external adoption target.
 
 .DESCRIPTION
-Updates the project-facing identity in README.md and .trae/current-project-state.md
-from the repository root inferred from this script location. Supports a check-only
-mode that reports the planned changes without modifying any files.
+Updates the project-facing identity in `README.md` and `.trae/current-project-state.md`
+for the selected target root. The script supports check-only mode by default, can seed
+missing files from the baseline repository, and skips custom adopter-owned README files
+instead of overwriting them silently.
 #>
 
 [CmdletBinding()]
@@ -16,66 +17,82 @@ param(
     [Parameter()]
     [string]$ProjectSummary = '',
 
+    [Parameter()]
+    [string]$TargetProjectRoot = '',
+
     [switch]$CheckOnly
 )
 
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
-function Get-ProjectRoot {
+function Get-BaselineProjectRoot {
     <#
     .SYNOPSIS
-    Resolves the repository root from the script path.
+    Resolves the baseline repository root from the script path.
     #>
     [OutputType([string])]
     param()
 
     $projectRoot = Split-Path -Parent $PSScriptRoot
     if (-not (Test-Path -LiteralPath $projectRoot -PathType Container)) {
-        throw "Unable to resolve the project root from script path: $PSScriptRoot"
+        throw "Unable to resolve the baseline project root from script path: $PSScriptRoot"
     }
 
-    return $projectRoot
+    return [System.IO.Path]::GetFullPath($projectRoot)
 }
 
-function Get-RequiredRelativePaths {
+function Resolve-TargetProjectRoot {
     <#
     .SYNOPSIS
-    Returns the files that must exist before initialization.
+    Resolves the target root and records whether it already exists.
     #>
-    [OutputType([string[]])]
-    param()
-
-    return @(
-        'README.md'
-        '.trae/current-project-state.md'
-    )
-}
-
-function Assert-RequiredFiles {
-    <#
-    .SYNOPSIS
-    Ensures the required files exist before any update is attempted.
-    #>
-    [OutputType([void])]
+    [OutputType([pscustomobject])]
     param(
         [Parameter(Mandatory = $true)]
-        [string]$ProjectRoot
+        [string]$RequestedTargetRoot,
+
+        [Parameter(Mandatory = $true)]
+        [string]$FallbackProjectRoot
     )
 
-    $missingFiles = New-Object System.Collections.Generic.List[string]
+    $effectiveRoot = if ([string]::IsNullOrWhiteSpace($RequestedTargetRoot)) { $FallbackProjectRoot } else { $RequestedTargetRoot }
+    $fullPath = [System.IO.Path]::GetFullPath($effectiveRoot)
 
-    foreach ($relativePath in Get-RequiredRelativePaths) {
-        $fullPath = Join-Path -Path $ProjectRoot -ChildPath $relativePath
-        if (-not (Test-Path -LiteralPath $fullPath -PathType Leaf)) {
-            $missingFiles.Add($relativePath)
+    if (Test-Path -LiteralPath $fullPath) {
+        if (-not (Test-Path -LiteralPath $fullPath -PathType Container)) {
+            throw "Target project root exists but is not a directory: $fullPath"
+        }
+
+        return [pscustomobject]@{
+            Path = $fullPath
+            Exists = $true
         }
     }
 
-    if ($missingFiles.Count -gt 0) {
-        $missingList = ($missingFiles | ForEach-Object { "- $_" }) -join [Environment]::NewLine
-        throw "Initialization cannot continue. Missing required files:$([Environment]::NewLine)$missingList"
+    return [pscustomobject]@{
+        Path = $fullPath
+        Exists = $false
     }
+}
+
+function Ensure-TargetRoot {
+    <#
+    .SYNOPSIS
+    Creates the target project root when apply mode needs it.
+    #>
+    [OutputType([bool])]
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$TargetRoot
+    )
+
+    if (Test-Path -LiteralPath $TargetRoot -PathType Container) {
+        return $false
+    }
+
+    New-Item -ItemType Directory -Path $TargetRoot -Force | Out-Null
+    return $true
 }
 
 function Get-EffectiveProjectSummary {
@@ -373,115 +390,316 @@ function Get-NormalizedComparableText {
     return $normalizedContent.TrimEnd("`r", "`n")
 }
 
-function Invoke-Initialization {
+function Get-BaselineSeedContent {
     <#
     .SYNOPSIS
-    Applies or previews the tracked project identity updates.
+    Returns the baseline content for a tracked file used as a seed.
+    #>
+    [OutputType([string])]
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$BaselineRoot,
+
+        [Parameter(Mandatory = $true)]
+        [string]$RelativePath
+    )
+
+    $seedPath = Join-Path -Path $BaselineRoot -ChildPath $RelativePath
+    if (-not (Test-Path -LiteralPath $seedPath -PathType Leaf)) {
+        throw "Baseline seed file not found at: $seedPath"
+    }
+
+    return Get-Content -LiteralPath $seedPath -Raw
+}
+
+function Ensure-ParentDirectory {
+    <#
+    .SYNOPSIS
+    Creates a file's parent directory when needed.
     #>
     [OutputType([void])]
     param(
         [Parameter(Mandatory = $true)]
-        [string]$ProjectRoot,
+        [string]$Path
+    )
+
+    $parentPath = Split-Path -Parent $Path
+    if (-not (Test-Path -LiteralPath $parentPath -PathType Container)) {
+        New-Item -ItemType Directory -Path $parentPath -Force | Out-Null
+    }
+}
+
+function New-InitializationFileResult {
+    <#
+    .SYNOPSIS
+    Creates a normalized per-file initialization result.
+    #>
+    [OutputType([pscustomobject])]
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$RelativePath,
+
+        [Parameter(Mandatory = $true)]
+        [string]$Status,
+
+        [Parameter(Mandatory = $true)]
+        [bool]$TargetExistedBeforeRun,
+
+        [Parameter(Mandatory = $true)]
+        [string]$Message
+    )
+
+    return [pscustomobject]@{
+        RelativePath = $RelativePath
+        Status = $Status
+        TargetExistedBeforeRun = $TargetExistedBeforeRun
+        Message = $Message
+    }
+}
+
+function Get-ReadmeInitializationResult {
+    <#
+    .SYNOPSIS
+    Calculates the README initialization result and optional updated content.
+    #>
+    [OutputType([pscustomobject])]
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$BaselineRoot,
+
+        [Parameter(Mandatory = $true)]
+        [string]$TargetRoot,
 
         [Parameter(Mandatory = $true)]
         [string]$ProjectName,
 
         [Parameter(Mandatory = $true)]
-        [string]$ProjectSummary,
-
-        [Parameter(Mandatory = $true)]
-        [bool]$IsCheckOnly
+        [string]$ProjectSummary
     )
 
-    $readmePath = Join-Path -Path $ProjectRoot -ChildPath 'README.md'
-    $projectStatePath = Join-Path -Path $ProjectRoot -ChildPath '.trae/current-project-state.md'
-
-    $readmeContent = Get-Content -LiteralPath $readmePath -Raw
-    $projectStateContent = Get-Content -LiteralPath $projectStatePath -Raw
-
-    $updatedProjectStateContent = Get-UpdatedProjectStateContent -Content $projectStateContent -ProjectName $ProjectName -ProjectSummary $ProjectSummary
-    $readmeSupportsIdentityUpdate = Test-ReadmeSupportsFactoryIdentityUpdate -Content $readmeContent
-    $updatedReadmeContent = $readmeContent
-    $readmeChanged = $false
-    if ($readmeSupportsIdentityUpdate) {
-        $updatedReadmeContent = Get-UpdatedReadmeContent -Content $readmeContent -ProjectName $ProjectName -ProjectSummary $ProjectSummary
-        $readmeChanged = (Get-NormalizedComparableText -Content $updatedReadmeContent) -cne (Get-NormalizedComparableText -Content $readmeContent)
-    }
-    $projectStateChanged = (Get-NormalizedComparableText -Content $updatedProjectStateContent) -cne (Get-NormalizedComparableText -Content $projectStateContent)
-
-    if ($IsCheckOnly) {
-        Write-Host 'Check-only mode: no files will be modified.'
-        if (-not $readmeSupportsIdentityUpdate) {
-            Write-Host 'README.md uses a project-specific structure; skipping README identity update.'
-        }
-        elseif ($readmeChanged) {
-            Write-Host "Would update README.md with project title '$ProjectName' and summary '$ProjectSummary'."
-        }
-        else {
-            Write-Host 'README.md is already aligned with the requested project identity.'
-        }
-
-        if ($projectStateChanged) {
-            Write-Host "Would update .trae/current-project-state.md with the Project Identity section for '$ProjectName'."
-        }
-        else {
-            Write-Host '.trae/current-project-state.md already contains the requested Project Identity section.'
-        }
-
-        return
-    }
-
-    if ($readmeSupportsIdentityUpdate -and $readmeChanged) {
-        Write-Utf8File -Path $readmePath -Content $updatedReadmeContent
-    }
-
-    if ($projectStateChanged) {
-        Write-Utf8File -Path $projectStatePath -Content $updatedProjectStateContent
-    }
-
-    Write-Host 'Project initialization completed successfully.'
-    if (-not $readmeSupportsIdentityUpdate) {
-        Write-Host 'README.md updated: skipped (project-specific README structure)'
+    $relativePath = 'README.md'
+    $targetPath = Join-Path -Path $TargetRoot -ChildPath $relativePath
+    $targetExists = Test-Path -LiteralPath $targetPath -PathType Leaf
+    $sourceContent = if ($targetExists) {
+        Get-Content -LiteralPath $targetPath -Raw
     }
     else {
-        Write-Host "README.md updated: $readmeChanged"
+        Get-BaselineSeedContent -BaselineRoot $BaselineRoot -RelativePath $relativePath
     }
-    Write-Host ".trae/current-project-state.md updated: $projectStateChanged"
+
+    if ($targetExists -and -not (Test-ReadmeSupportsFactoryIdentityUpdate -Content $sourceContent)) {
+        return [pscustomobject]@{
+            RelativePath = $relativePath
+            TargetPath = $targetPath
+            TargetExistsBeforeRun = $targetExists
+            ShouldWrite = $false
+            Content = $null
+            Result = (New-InitializationFileResult -RelativePath $relativePath -Status 'manual_review_required' -TargetExistedBeforeRun $targetExists -Message 'README.md uses a custom structure; skipped automatic identity update.')
+            ManualFollowUp = 'README.md already exists with a custom structure. Update the project title/summary manually if you want the factory identity header.'
+        }
+    }
+
+    $updatedContent = Get-UpdatedReadmeContent -Content $sourceContent -ProjectName $ProjectName -ProjectSummary $ProjectSummary
+    $hasChanges = (Get-NormalizedComparableText -Content $updatedContent) -cne (Get-NormalizedComparableText -Content $sourceContent)
+
+    $status = if (-not $targetExists) {
+        'create_from_seed'
+    }
+    elseif ($hasChanges) {
+        'update_identity'
+    }
+    else {
+        'already_aligned'
+    }
+
+    $message = switch ($status) {
+        'create_from_seed' { 'README.md will be created from the baseline seed with the requested project identity.' }
+        'update_identity' { 'README.md identity header will be updated.' }
+        default { 'README.md is already aligned with the requested project identity.' }
+    }
+
+    return [pscustomobject]@{
+        RelativePath = $relativePath
+        TargetPath = $targetPath
+        TargetExistsBeforeRun = $targetExists
+        ShouldWrite = (-not $targetExists) -or $hasChanges
+        Content = $updatedContent
+        Result = (New-InitializationFileResult -RelativePath $relativePath -Status $status -TargetExistedBeforeRun $targetExists -Message $message)
+        ManualFollowUp = $null
+    }
+}
+
+function Get-ProjectStateInitializationResult {
+    <#
+    .SYNOPSIS
+    Calculates the current-project-state initialization result and updated content.
+    #>
+    [OutputType([pscustomobject])]
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$BaselineRoot,
+
+        [Parameter(Mandatory = $true)]
+        [string]$TargetRoot,
+
+        [Parameter(Mandatory = $true)]
+        [string]$ProjectName,
+
+        [Parameter(Mandatory = $true)]
+        [string]$ProjectSummary
+    )
+
+    $relativePath = '.trae/current-project-state.md'
+    $targetPath = Join-Path -Path $TargetRoot -ChildPath $relativePath
+    $targetExists = Test-Path -LiteralPath $targetPath -PathType Leaf
+    $sourceContent = if ($targetExists) {
+        Get-Content -LiteralPath $targetPath -Raw
+    }
+    else {
+        Get-BaselineSeedContent -BaselineRoot $BaselineRoot -RelativePath $relativePath
+    }
+
+    $updatedContent = Get-UpdatedProjectStateContent -Content $sourceContent -ProjectName $ProjectName -ProjectSummary $ProjectSummary
+    $hasChanges = (Get-NormalizedComparableText -Content $updatedContent) -cne (Get-NormalizedComparableText -Content $sourceContent)
+
+    $status = if (-not $targetExists) {
+        'create_from_seed'
+    }
+    elseif ($hasChanges) {
+        'update_identity'
+    }
+    else {
+        'already_aligned'
+    }
+
+    $message = switch ($status) {
+        'create_from_seed' { '.trae/current-project-state.md will be created from the baseline seed with the requested project identity.' }
+        'update_identity' { '.trae/current-project-state.md Project Identity section will be updated.' }
+        default { '.trae/current-project-state.md already contains the requested project identity.' }
+    }
+
+    return [pscustomobject]@{
+        RelativePath = $relativePath
+        TargetPath = $targetPath
+        TargetExistsBeforeRun = $targetExists
+        ShouldWrite = (-not $targetExists) -or $hasChanges
+        Content = $updatedContent
+        Result = (New-InitializationFileResult -RelativePath $relativePath -Status $status -TargetExistedBeforeRun $targetExists -Message $message)
+        ManualFollowUp = $null
+    }
+}
+
+function Write-InitializationPreview {
+    <#
+    .SYNOPSIS
+    Prints a concise preview or apply summary for initialization.
+    #>
+    [OutputType([void])]
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$TargetRoot,
+
+        [Parameter(Mandatory = $true)]
+        [bool]$IsCheckOnly,
+
+        [Parameter(Mandatory = $true)]
+        [bool]$TargetRootExistedBeforeRun,
+
+        [Parameter(Mandatory = $true)]
+        [pscustomobject[]]$FileResults,
+
+        [object[]]$ManualFollowUps = @()
+    )
+
+    Write-Host ("Initialization target: {0}" -f $TargetRoot)
+    Write-Host ("Mode: {0}" -f $(if ($IsCheckOnly) { 'check-only' } else { 'apply' }))
+    Write-Host ("Target root status: {0}" -f $(if ($TargetRootExistedBeforeRun) { 'existing' } else { 'will_create_on_apply' }))
+
+    foreach ($fileResult in $FileResults) {
+        Write-Host ("[{0}] {1} - {2}" -f $fileResult.Status.ToUpperInvariant(), $fileResult.RelativePath, $fileResult.Message)
+    }
+
+    if ($ManualFollowUps.Count -gt 0) {
+        Write-Host 'Manual follow-ups:'
+        foreach ($followUp in $ManualFollowUps) {
+            Write-Host "- $followUp"
+        }
+    }
 }
 
 function Main {
     <#
     .SYNOPSIS
-    Validates inputs and runs the project initializer.
+    Validates inputs and applies or previews project identity initialization.
     #>
-    [OutputType([void])]
+    [OutputType([pscustomobject])]
     param(
         [Parameter(Mandatory = $true)]
-        [string]$ProjectName,
+        [string]$RequestedProjectName,
 
         [Parameter()]
         [AllowEmptyString()]
-        [string]$ProjectSummary,
+        [string]$RequestedProjectSummary,
+
+        [Parameter()]
+        [AllowEmptyString()]
+        [string]$RequestedTargetRoot,
 
         [Parameter(Mandatory = $true)]
         [bool]$IsCheckOnly
     )
 
-    $trimmedProjectName = $ProjectName.Trim()
+    $trimmedProjectName = $RequestedProjectName.Trim()
     if ([string]::IsNullOrWhiteSpace($trimmedProjectName)) {
         throw 'ProjectName must contain at least one non-whitespace character.'
     }
 
-    $projectRoot = Get-ProjectRoot
-    Assert-RequiredFiles -ProjectRoot $projectRoot
+    $baselineRoot = Get-BaselineProjectRoot
+    $targetInfo = Resolve-TargetProjectRoot -RequestedTargetRoot $RequestedTargetRoot -FallbackProjectRoot $baselineRoot
+    $effectiveSummary = Get-EffectiveProjectSummary -Summary $RequestedProjectSummary
 
-    $effectiveSummary = Get-EffectiveProjectSummary -Summary $ProjectSummary
-    Invoke-Initialization -ProjectRoot $projectRoot -ProjectName $trimmedProjectName -ProjectSummary $effectiveSummary -IsCheckOnly $IsCheckOnly
+    $readmePlan = Get-ReadmeInitializationResult -BaselineRoot $baselineRoot -TargetRoot $targetInfo.Path -ProjectName $trimmedProjectName -ProjectSummary $effectiveSummary
+    $projectStatePlan = Get-ProjectStateInitializationResult -BaselineRoot $baselineRoot -TargetRoot $targetInfo.Path -ProjectName $trimmedProjectName -ProjectSummary $effectiveSummary
+
+    $fileResults = @($readmePlan.Result, $projectStatePlan.Result)
+    $manualFollowUps = @($readmePlan.ManualFollowUp, $projectStatePlan.ManualFollowUp | Where-Object { -not [string]::IsNullOrWhiteSpace($_) })
+
+    Write-InitializationPreview -TargetRoot $targetInfo.Path -IsCheckOnly $IsCheckOnly -TargetRootExistedBeforeRun $targetInfo.Exists -FileResults $fileResults -ManualFollowUps $manualFollowUps
+
+    $targetRootCreated = $false
+    if (-not $IsCheckOnly) {
+        $targetRootCreated = Ensure-TargetRoot -TargetRoot $targetInfo.Path
+
+        foreach ($plan in @($readmePlan, $projectStatePlan)) {
+            if (-not $plan.ShouldWrite) {
+                continue
+            }
+
+            Ensure-ParentDirectory -Path $plan.TargetPath
+            Write-Utf8File -Path $plan.TargetPath -Content $plan.Content
+        }
+
+        Write-Host 'Project initialization completed successfully.'
+    }
+    else {
+        Write-Host 'Check-only mode: no files will be modified.'
+    }
+
+    return [pscustomobject]@{
+        TargetRoot = $targetInfo.Path
+        Mode = if ($IsCheckOnly) { 'check-only' } else { 'apply' }
+        TargetRootExistedBeforeRun = $targetInfo.Exists
+        TargetRootCreated = $targetRootCreated
+        ProjectName = $trimmedProjectName
+        ProjectSummary = $effectiveSummary
+        FileResults = $fileResults
+        ManualFollowUps = $manualFollowUps
+    }
 }
 
 if ($MyInvocation.InvocationName -ne '.') {
     try {
-        Main -ProjectName $ProjectName -ProjectSummary $ProjectSummary -IsCheckOnly $CheckOnly.IsPresent
+        Main -RequestedProjectName $ProjectName -RequestedProjectSummary $ProjectSummary -RequestedTargetRoot $TargetProjectRoot -IsCheckOnly $CheckOnly.IsPresent
     }
     catch {
         Write-Error $_

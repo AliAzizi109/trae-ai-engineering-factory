@@ -5,9 +5,8 @@ Safely compares or syncs the tracked factory baseline into an adopter repository
 .DESCRIPTION
 Reads the authoritative manifest from `.trae/factory/config/baseline-files.manifest.json`
 and builds a non-destructive sync plan for a target repository. The script runs in
-check-only mode by default, never deletes files, and skips project-specific files such
-as `README.md` and `.trae/current-project-state.md` unless `-IncludeProjectSpecific`
-is explicitly provided.
+check-only mode by default, never deletes files, and supports a seed-missing-only
+mode for project-specific files such as `README.md` and `.trae/current-project-state.md`.
 #>
 
 [CmdletBinding()]
@@ -21,6 +20,9 @@ param(
 
     [Parameter()]
     [switch]$IncludeProjectSpecific,
+
+    [Parameter()]
+    [switch]$SeedProjectSpecificIfMissing,
 
     [Parameter()]
     [switch]$FailOnDifferences
@@ -56,7 +58,7 @@ function Get-BaselineManifestPath {
         [string]$ProjectRoot
     )
 
-    $manifestPath = Join-Path -Path $ProjectRoot -ChildPath '.trae\\factory\\config\\baseline-files.manifest.json'
+    $manifestPath = Join-Path -Path $ProjectRoot -ChildPath '.trae\factory\config\baseline-files.manifest.json'
     if (-not (Test-Path -LiteralPath $manifestPath -PathType Leaf)) {
         throw "Baseline manifest not found at: $manifestPath"
     }
@@ -136,25 +138,39 @@ function Get-BaselineManifest {
 function Resolve-TargetProjectRoot {
     <#
     .SYNOPSIS
-    Resolves and validates the adopter repository root.
+    Resolves the requested adopter repository root and records whether it already exists.
     #>
-    [OutputType([string])]
+    [OutputType([pscustomobject])]
     param(
         [Parameter(Mandatory = $true)]
         [string]$Path
     )
 
-    if (-not (Test-Path -LiteralPath $Path -PathType Container)) {
-        throw "Target project root does not exist or is not a directory: $Path"
+    $fullPath = [System.IO.Path]::GetFullPath($Path)
+
+    if (Test-Path -LiteralPath $fullPath) {
+        if (-not (Test-Path -LiteralPath $fullPath -PathType Container)) {
+            throw "Target project root exists but is not a directory: $fullPath"
+        }
+
+        return [pscustomobject]@{
+            Path = $fullPath
+            Exists = $true
+            ParentPath = Split-Path -Parent $fullPath
+        }
     }
 
-    return [System.IO.Path]::GetFullPath($Path)
+    return [pscustomobject]@{
+        Path = $fullPath
+        Exists = $false
+        ParentPath = Split-Path -Parent $fullPath
+    }
 }
 
-function Get-EffectiveSyncMode {
+function Get-ManifestDeclaredMode {
     <#
     .SYNOPSIS
-    Returns the effective sync mode for a manifest entry.
+    Returns the manifest-declared sync mode for an entry.
     #>
     [OutputType([string])]
     param(
@@ -165,16 +181,47 @@ function Get-EffectiveSyncMode {
         [bool]$AllowProjectSpecific
     )
 
-    $defaultMode = [string]$Entry.sync.default_mode
+    $defaultModeProperty = $Entry.sync.PSObject.Properties['default_mode']
+    $defaultMode = if ($null -ne $defaultModeProperty) { [string]$defaultModeProperty.Value } else { '' }
     if ([string]::IsNullOrWhiteSpace($defaultMode)) {
         throw "Manifest entry '$($Entry.path)' is missing sync.default_mode."
     }
 
-    if ($AllowProjectSpecific -and -not [string]::IsNullOrWhiteSpace([string]$Entry.sync.override_mode)) {
-        return [string]$Entry.sync.override_mode
+    $overrideModeProperty = $Entry.sync.PSObject.Properties['override_mode']
+    $overrideMode = if ($null -ne $overrideModeProperty) { [string]$overrideModeProperty.Value } else { '' }
+
+    if ($AllowProjectSpecific -and -not [string]::IsNullOrWhiteSpace($overrideMode)) {
+        return $overrideMode
     }
 
     return $defaultMode
+}
+
+function Get-EffectiveSyncMode {
+    <#
+    .SYNOPSIS
+    Returns the effective sync mode for a manifest entry in the current run.
+    #>
+    [OutputType([string])]
+    param(
+        [Parameter(Mandatory = $true)]
+        [pscustomobject]$Entry,
+
+        [Parameter(Mandatory = $true)]
+        [bool]$AllowProjectSpecific,
+
+        [Parameter(Mandatory = $true)]
+        [bool]$SeedMissingProjectSpecific
+    )
+
+    $declaredMode = Get-ManifestDeclaredMode -Entry $Entry -AllowProjectSpecific $AllowProjectSpecific
+    $category = [string]$Entry.sync.category
+
+    if ($SeedMissingProjectSpecific -and $category -eq 'project_specific' -and -not $AllowProjectSpecific) {
+        return 'seed_if_missing'
+    }
+
+    return $declaredMode
 }
 
 function Test-FileContentMatch {
@@ -267,7 +314,10 @@ function Get-SyncPlan {
         [string]$TargetRoot,
 
         [Parameter(Mandatory = $true)]
-        [bool]$AllowProjectSpecific
+        [bool]$AllowProjectSpecific,
+
+        [Parameter(Mandatory = $true)]
+        [bool]$SeedMissingProjectSpecific
     )
 
     $manifest = Get-BaselineManifest -ProjectRoot $BaselineRoot
@@ -277,7 +327,7 @@ function Get-SyncPlan {
         $relativePath = [string]$entry.path
         $sourcePath = Join-Path -Path $BaselineRoot -ChildPath $relativePath
         $targetPath = Join-Path -Path $TargetRoot -ChildPath $relativePath
-        $mode = Get-EffectiveSyncMode -Entry $entry -AllowProjectSpecific $AllowProjectSpecific
+        $mode = Get-EffectiveSyncMode -Entry $entry -AllowProjectSpecific $AllowProjectSpecific -SeedMissingProjectSpecific $SeedMissingProjectSpecific
         $category = [string]$entry.sync.category
         $reason = [string]$entry.sync.reason
         $targetExists = Test-Path -LiteralPath $targetPath -PathType Leaf
@@ -290,6 +340,16 @@ function Get-SyncPlan {
             'skip' {
                 $status = if ($targetExists) { 'skipped_existing' } else { 'skipped_missing' }
                 $plan.Add((New-SyncPlanItem -RelativePath $relativePath -Category $category -Mode $mode -Status $status -Reason $reason -SourcePath $sourcePath -TargetPath $targetPath -TargetExists $targetExists -NeedsUpdate $false))
+                continue
+            }
+            'seed_if_missing' {
+                if ($targetExists) {
+                    $plan.Add((New-SyncPlanItem -RelativePath $relativePath -Category $category -Mode $mode -Status 'skipped_existing' -Reason $reason -SourcePath $sourcePath -TargetPath $targetPath -TargetExists $true -NeedsUpdate $false))
+                }
+                else {
+                    $plan.Add((New-SyncPlanItem -RelativePath $relativePath -Category $category -Mode $mode -Status 'missing_seed' -Reason $reason -SourcePath $sourcePath -TargetPath $targetPath -TargetExists $false -NeedsUpdate $true))
+                }
+
                 continue
             }
             'copy_if_different' {
@@ -317,23 +377,63 @@ function Get-SyncPlan {
     return $plan.ToArray()
 }
 
+function Get-SyncSummary {
+    <#
+    .SYNOPSIS
+    Builds a compact summary from a sync plan.
+    #>
+    [OutputType([pscustomobject])]
+    param(
+        [Parameter(Mandatory = $true)]
+        [pscustomobject[]]$Plan
+    )
+
+    $pendingItems = @($Plan | Where-Object { $_.NeedsUpdate })
+
+    return [pscustomobject]@{
+        InSyncCount = @($Plan | Where-Object { $_.Status -eq 'in_sync' }).Count
+        MissingCount = @($Plan | Where-Object { $_.Status -eq 'missing' }).Count
+        MissingSeedCount = @($Plan | Where-Object { $_.Status -eq 'missing_seed' }).Count
+        DifferentCount = @($Plan | Where-Object { $_.Status -eq 'different' }).Count
+        SkippedExistingCount = @($Plan | Where-Object { $_.Status -eq 'skipped_existing' }).Count
+        SkippedMissingCount = @($Plan | Where-Object { $_.Status -eq 'skipped_missing' }).Count
+        PendingChangeCount = $pendingItems.Count
+        BaselineFilesToEstablishCount = @($pendingItems | Where-Object { $_.Status -eq 'missing' }).Count
+        ProjectSpecificFilesToSeedCount = @($pendingItems | Where-Object { $_.Status -eq 'missing_seed' }).Count
+        FilesToUpdateCount = @($pendingItems | Where-Object { $_.Status -eq 'different' }).Count
+    }
+}
+
 function Invoke-SyncPlan {
     <#
     .SYNOPSIS
     Applies the non-destructive portion of the sync plan.
     #>
-    [OutputType([void])]
+    [OutputType([pscustomobject])]
     param(
         [Parameter(Mandatory = $true)]
-        [pscustomobject[]]$Plan
+        [pscustomobject[]]$Plan,
+
+        [Parameter(Mandatory = $true)]
+        [string]$TargetRoot,
+
+        [Parameter(Mandatory = $true)]
+        [bool]$CreateTargetRoot
     )
+
+    $targetRootCreated = $false
+
+    if ($CreateTargetRoot -and -not (Test-Path -LiteralPath $TargetRoot -PathType Container)) {
+        New-Item -ItemType Directory -Path $TargetRoot -Force | Out-Null
+        $targetRootCreated = $true
+    }
 
     foreach ($item in $Plan) {
         if (-not $item.NeedsUpdate) {
             continue
         }
 
-        if ($item.Mode -ne 'copy_if_different') {
+        if ($item.Mode -notin @('copy_if_different', 'seed_if_missing')) {
             continue
         }
 
@@ -343,6 +443,10 @@ function Invoke-SyncPlan {
         }
 
         Copy-Item -LiteralPath $item.SourcePath -Destination $item.TargetPath -Force
+    }
+
+    return [pscustomobject]@{
+        TargetRootCreated = $targetRootCreated
     }
 }
 
@@ -357,20 +461,28 @@ function Write-SyncPlan {
         [pscustomobject[]]$Plan,
 
         [Parameter(Mandatory = $true)]
-        [string]$TargetRoot,
+        [pscustomobject]$Summary,
+
+        [Parameter(Mandatory = $true)]
+        [pscustomobject]$TargetInfo,
 
         [Parameter(Mandatory = $true)]
         [bool]$IsApply
     )
 
-    $missingCount = @($Plan | Where-Object { $_.Status -eq 'missing' }).Count
-    $differentCount = @($Plan | Where-Object { $_.Status -eq 'different' }).Count
-    $skippedCount = @($Plan | Where-Object { $_.Mode -eq 'skip' }).Count
-    $inSyncCount = @($Plan | Where-Object { $_.Status -eq 'in_sync' }).Count
+    $modeLabel = if ($IsApply) { 'apply' } else { 'check-only' }
+    $rootStatus = if ($TargetInfo.Exists) { 'existing' } else { 'will_create_on_apply' }
 
-    Write-Host "Baseline sync target: $TargetRoot"
-    Write-Host ("Mode: {0}" -f $(if ($IsApply) { 'apply' } else { 'check-only' }))
-    Write-Host "Summary: in-sync=$inSyncCount, missing=$missingCount, different=$differentCount, skipped=$skippedCount"
+    Write-Host "Baseline sync target: $($TargetInfo.Path)"
+    Write-Host "Mode: $modeLabel"
+    Write-Host "Target root status: $rootStatus"
+    Write-Host ("Summary: in-sync={0}, establish={1}, seed-project-specific={2}, update={3}, skipped-existing={4}, skipped-missing={5}" -f `
+        $Summary.InSyncCount,
+        $Summary.BaselineFilesToEstablishCount,
+        $Summary.ProjectSpecificFilesToSeedCount,
+        $Summary.FilesToUpdateCount,
+        $Summary.SkippedExistingCount,
+        $Summary.SkippedMissingCount)
 
     foreach ($item in $Plan) {
         Write-Host ("[{0}] {1} ({2})" -f $item.Status.ToUpperInvariant(), $item.RelativePath, $item.Reason)
@@ -382,7 +494,7 @@ function Main {
     .SYNOPSIS
     Builds and optionally applies the safe baseline sync plan.
     #>
-    [OutputType([void])]
+    [OutputType([pscustomobject])]
     param(
         [Parameter(Mandatory = $true)]
         [string]$RequestedTargetRoot,
@@ -394,37 +506,57 @@ function Main {
         [bool]$AllowProjectSpecific,
 
         [Parameter(Mandatory = $true)]
+        [bool]$SeedMissingProjectSpecific,
+
+        [Parameter(Mandatory = $true)]
         [bool]$ShouldFailOnDifferences
     )
 
-    $baselineRoot = Get-ProjectRoot
-    $targetRoot = Resolve-TargetProjectRoot -Path $RequestedTargetRoot
-    $plan = Get-SyncPlan -BaselineRoot $baselineRoot -TargetRoot $targetRoot -AllowProjectSpecific $AllowProjectSpecific
+    if ($AllowProjectSpecific -and $SeedMissingProjectSpecific) {
+        throw 'Use either -IncludeProjectSpecific or -SeedProjectSpecificIfMissing, not both.'
+    }
 
-    Write-SyncPlan -Plan $plan -TargetRoot $targetRoot -IsApply $ShouldApply
+    $baselineRoot = Get-ProjectRoot
+    $targetInfo = Resolve-TargetProjectRoot -Path $RequestedTargetRoot
+    $plan = Get-SyncPlan -BaselineRoot $baselineRoot -TargetRoot $targetInfo.Path -AllowProjectSpecific $AllowProjectSpecific -SeedMissingProjectSpecific $SeedMissingProjectSpecific
+    $summary = Get-SyncSummary -Plan $plan
+
+    Write-SyncPlan -Plan $plan -Summary $summary -TargetInfo $targetInfo -IsApply $ShouldApply
+
+    $applyResult = [pscustomobject]@{
+        TargetRootCreated = $false
+    }
 
     if ($ShouldApply) {
-        Invoke-SyncPlan -Plan $plan
+        $applyResult = Invoke-SyncPlan -Plan $plan -TargetRoot $targetInfo.Path -CreateTargetRoot (-not $targetInfo.Exists)
         Write-Host 'Baseline sync apply completed successfully.'
-        return
     }
+    else {
+        $hasDifferences = $summary.PendingChangeCount -gt 0
+        if ($hasDifferences) {
+            Write-Warning 'Differences were found. Re-run with -Apply to copy safe baseline-managed files.'
 
-    $hasDifferences = @($plan | Where-Object { $_.NeedsUpdate }).Count -gt 0
-    if ($hasDifferences) {
-        Write-Warning 'Differences were found. Re-run with -Apply to copy safe baseline-managed files.'
-
-        if ($ShouldFailOnDifferences) {
-            throw 'Baseline sync check detected differences.'
+            if ($ShouldFailOnDifferences) {
+                throw 'Baseline sync check detected differences.'
+            }
         }
-
-        return
+        else {
+            Write-Host 'Baseline sync check passed. No safe sync changes are pending.'
+        }
     }
 
-    Write-Host 'Baseline sync check passed. No safe sync changes are pending.'
+    return [pscustomobject]@{
+        TargetRoot = $targetInfo.Path
+        Mode = if ($ShouldApply) { 'apply' } else { 'check-only' }
+        TargetRootExistedBeforeRun = $targetInfo.Exists
+        TargetRootCreated = $applyResult.TargetRootCreated
+        Plan = $plan
+        Summary = $summary
+    }
 }
 
 try {
-    Main -RequestedTargetRoot $TargetProjectRoot -ShouldApply $Apply.IsPresent -AllowProjectSpecific $IncludeProjectSpecific.IsPresent -ShouldFailOnDifferences $FailOnDifferences.IsPresent
+    Main -RequestedTargetRoot $TargetProjectRoot -ShouldApply $Apply.IsPresent -AllowProjectSpecific $IncludeProjectSpecific.IsPresent -SeedMissingProjectSpecific $SeedProjectSpecificIfMissing.IsPresent -ShouldFailOnDifferences $FailOnDifferences.IsPresent
 }
 catch {
     Write-Error $_
