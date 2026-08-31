@@ -91,3 +91,5 @@ Inspect model selection with:
 Inspect a task summary with:
 
 `powershell -ExecutionPolicy Bypass -File .\\scripts\\get-factory-task-summary.ps1 -TaskPath ".trae\\factory\\tasks\\task-id.json"`
+
+`TaskPath` may be provided as a task filename, a repo-relative task path, or an absolute path.

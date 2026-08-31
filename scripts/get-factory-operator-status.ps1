@@ -110,7 +110,13 @@ function Resolve-RequestedTaskPath {
         $Path
     }
     else {
-        Join-Path -Path $taskDirectory -ChildPath $Path
+        $projectRelativePath = Join-Path -Path (Get-ProjectRoot) -ChildPath $Path
+        if (Test-Path -LiteralPath $projectRelativePath -PathType Leaf) {
+            $projectRelativePath
+        }
+        else {
+            Join-Path -Path $taskDirectory -ChildPath $Path
+        }
     }
 
     $fullPath = Normalize-CanonicalPath -Path $candidatePath

@@ -2651,7 +2651,13 @@ function Resolve-TaskFilePath {
         $resolvedPath = [System.IO.Path]::GetFullPath($PathValue)
     }
     else {
-        $resolvedPath = [System.IO.Path]::GetFullPath((Join-Path -Path $tasksRoot -ChildPath $PathValue))
+        $projectRelativePath = [System.IO.Path]::GetFullPath((Join-Path -Path $ProjectRoot -ChildPath $PathValue))
+        if (Test-Path -LiteralPath $projectRelativePath -PathType Leaf) {
+            $resolvedPath = $projectRelativePath
+        }
+        else {
+            $resolvedPath = [System.IO.Path]::GetFullPath((Join-Path -Path $tasksRoot -ChildPath $PathValue))
+        }
     }
 
     if (-not (Test-PathWithinRoot -RootPath $tasksRoot -CandidatePath $resolvedPath)) {

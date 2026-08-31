@@ -20,6 +20,18 @@ This repository is a small, reusable baseline for running an AI engineering fact
 - `scripts/select-factory-model.ps1` includes selection index, remaining candidates, the next fallback candidate, and an operator summary while keeping the routing truthfulness note explicit.
 - The V2 hardening model remains in place: task-path scope checks, exact handle validation, and synchronized backup guards are preserved or strengthened rather than replaced.
 
+## V4-B Baseline Flow
+
+- `.trae/factory/config/baseline-files.manifest.json` is now the single source of truth for tracked baseline files. `scripts/bootstrap-factory.ps1` validates against this manifest instead of a duplicated hardcoded list.
+- `scripts/sync-factory-baseline.ps1` reads the same manifest and runs in check-only mode by default. It never deletes files, and it skips project-specific files such as `README.md` and `.trae/current-project-state.md` unless `-IncludeProjectSpecific` is explicitly supplied.
+- `scripts/start-factory-task.ps1` is the low-friction task entrypoint. It wraps `new-factory-task.ps1`, then immediately runs `get-factory-task-summary.ps1` and `get-factory-operator-status.ps1` for the same task without introducing a parallel workflow.
+
+## Short Commands
+
+- Validate baseline files only: `powershell -ExecutionPolicy Bypass -File .\scripts\bootstrap-factory.ps1 -CheckOnly`
+- Preview a baseline sync plan: `powershell -ExecutionPolicy Bypass -File .\scripts\sync-factory-baseline.ps1 -TargetProjectRoot <repo-path>`
+- Start a task quickly: `powershell -ExecutionPolicy Bypass -File .\scripts\start-factory-task.ps1 -Objective "..." -Scope "..." -Constraints "..."`
+
 ## Repository Structure
 
 ```text
@@ -206,6 +218,9 @@ Selects the preferred or next fallback model for one role from the tracked routi
 powershell -ExecutionPolicy Bypass -File .\scripts\get-factory-task-summary.ps1 -TaskPath ".trae\factory\tasks\task-id.json"
 ```
 Prints a concise operational summary for one task record.
+
+`-TaskPath` accepts either a task filename, a repo-relative task path such as
+`.trae\factory\tasks\task-id.json`, or an absolute path.
 
 ```powershell
 git status

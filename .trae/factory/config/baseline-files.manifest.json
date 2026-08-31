@@ -1,0 +1,288 @@
+{
+  "schema_version": "factory-baseline-manifest-v1",
+  "last_updated": "2026-08-31",
+  "description": "Authoritative baseline file list for bootstrap validation and safe adopter synchronization.",
+  "files": [
+    {
+      "path": "AGENTS.md",
+      "bootstrap_required": true,
+      "sync": {
+        "category": "baseline",
+        "default_mode": "copy_if_different",
+        "reason": "Repository-level operating instructions belong to the shared factory baseline."
+      }
+    },
+    {
+      "path": "README.md",
+      "bootstrap_required": false,
+      "sync": {
+        "category": "project_specific",
+        "default_mode": "skip",
+        "override_mode": "copy_if_different",
+        "reason": "The adopter owns the project-facing README by default."
+      }
+    },
+    {
+      "path": ".trae/agent-specs.md",
+      "bootstrap_required": true,
+      "sync": {
+        "category": "baseline",
+        "default_mode": "copy_if_different",
+        "reason": "Agent contract guidance is baseline-managed."
+      }
+    },
+    {
+      "path": ".trae/current-project-state.md",
+      "bootstrap_required": false,
+      "sync": {
+        "category": "project_specific",
+        "default_mode": "skip",
+        "override_mode": "copy_if_different",
+        "reason": "Current project state is adopter-owned after initialization."
+      }
+    },
+    {
+      "path": ".trae/mcp.json",
+      "bootstrap_required": true,
+      "sync": {
+        "category": "baseline",
+        "default_mode": "copy_if_different",
+        "reason": "Tracked project MCP wiring is part of the reusable baseline."
+      }
+    },
+    {
+      "path": ".trae/agents/factory-reviewer.md",
+      "bootstrap_required": true,
+      "sync": {
+        "category": "baseline",
+        "default_mode": "copy_if_different",
+        "reason": "Factory reviewer instructions are baseline-managed."
+      }
+    },
+    {
+      "path": ".trae/agents/security-reviewer.md",
+      "bootstrap_required": true,
+      "sync": {
+        "category": "baseline",
+        "default_mode": "copy_if_different",
+        "reason": "Security reviewer instructions are baseline-managed."
+      }
+    },
+    {
+      "path": ".trae/agents/qa-verifier.md",
+      "bootstrap_required": true,
+      "sync": {
+        "category": "baseline",
+        "default_mode": "copy_if_different",
+        "reason": "QA verifier instructions are baseline-managed."
+      }
+    },
+    {
+      "path": ".trae/rules/00-constitution.md",
+      "bootstrap_required": true,
+      "sync": {
+        "category": "baseline",
+        "default_mode": "copy_if_different",
+        "reason": "The factory constitution is baseline-managed."
+      }
+    },
+    {
+      "path": ".trae/factory/config/baseline-files.manifest.json",
+      "bootstrap_required": true,
+      "sync": {
+        "category": "baseline",
+        "default_mode": "copy_if_different",
+        "reason": "The manifest itself is the source of truth for shared baseline files."
+      }
+    },
+    {
+      "path": ".trae/factory/config/handoffs.json",
+      "bootstrap_required": true,
+      "sync": {
+        "category": "baseline",
+        "default_mode": "copy_if_different",
+        "reason": "Workflow handoffs are baseline-managed."
+      }
+    },
+    {
+      "path": ".trae/factory/config/model-routing.json",
+      "bootstrap_required": true,
+      "sync": {
+        "category": "baseline",
+        "default_mode": "copy_if_different",
+        "reason": "Model routing is baseline-managed."
+      }
+    },
+    {
+      "path": ".trae/factory/config/role-system.json",
+      "bootstrap_required": true,
+      "sync": {
+        "category": "baseline",
+        "default_mode": "copy_if_different",
+        "reason": "Role contracts are baseline-managed."
+      }
+    },
+    {
+      "path": ".trae/factory/factory-system.md",
+      "bootstrap_required": true,
+      "sync": {
+        "category": "baseline",
+        "default_mode": "copy_if_different",
+        "reason": "Factory system guidance is baseline-managed."
+      }
+    },
+    {
+      "path": ".trae/factory/verification-matrix.md",
+      "bootstrap_required": true,
+      "sync": {
+        "category": "baseline",
+        "default_mode": "copy_if_different",
+        "reason": "Verification guidance is baseline-managed."
+      }
+    },
+    {
+      "path": ".trae/factory/tasks/README.md",
+      "bootstrap_required": true,
+      "sync": {
+        "category": "baseline",
+        "default_mode": "copy_if_different",
+        "reason": "Task usage guidance is baseline-managed."
+      }
+    },
+    {
+      "path": ".trae/factory/templates/task-state.template.json",
+      "bootstrap_required": true,
+      "sync": {
+        "category": "baseline",
+        "default_mode": "copy_if_different",
+        "reason": "Task-state JSON template is baseline-managed."
+      }
+    },
+    {
+      "path": ".trae/factory/templates/task.md",
+      "bootstrap_required": true,
+      "sync": {
+        "category": "baseline",
+        "default_mode": "copy_if_different",
+        "reason": "Legacy task markdown template is baseline-managed."
+      }
+    },
+    {
+      "path": ".gitignore",
+      "bootstrap_required": true,
+      "sync": {
+        "category": "baseline",
+        "default_mode": "copy_if_different",
+        "reason": "Shared ignore rules are baseline-managed."
+      }
+    },
+    {
+      "path": "scripts/bootstrap-factory.ps1",
+      "bootstrap_required": true,
+      "sync": {
+        "category": "baseline",
+        "default_mode": "copy_if_different",
+        "reason": "Bootstrap logic is baseline-managed."
+      }
+    },
+    {
+      "path": "scripts/bootstrap-project-fs.ps1",
+      "bootstrap_required": true,
+      "sync": {
+        "category": "baseline",
+        "default_mode": "copy_if_different",
+        "reason": "Project-fs bootstrap logic is baseline-managed."
+      }
+    },
+    {
+      "path": "scripts/get-factory-operator-status.ps1",
+      "bootstrap_required": true,
+      "sync": {
+        "category": "baseline",
+        "default_mode": "copy_if_different",
+        "reason": "Operator dashboard logic is baseline-managed."
+      }
+    },
+    {
+      "path": "scripts/get-factory-task-summary.ps1",
+      "bootstrap_required": true,
+      "sync": {
+        "category": "baseline",
+        "default_mode": "copy_if_different",
+        "reason": "Task summary logic is baseline-managed."
+      }
+    },
+    {
+      "path": "scripts/initialize-factory-project.ps1",
+      "bootstrap_required": true,
+      "sync": {
+        "category": "baseline",
+        "default_mode": "copy_if_different",
+        "reason": "Project initialization logic is baseline-managed."
+      }
+    },
+    {
+      "path": "scripts/new-factory-task.ps1",
+      "bootstrap_required": true,
+      "sync": {
+        "category": "baseline",
+        "default_mode": "copy_if_different",
+        "reason": "Task creation logic is baseline-managed."
+      }
+    },
+    {
+      "path": "scripts/select-factory-model.ps1",
+      "bootstrap_required": true,
+      "sync": {
+        "category": "baseline",
+        "default_mode": "copy_if_different",
+        "reason": "Model selection logic is baseline-managed."
+      }
+    },
+    {
+      "path": "scripts/start-factory-task.ps1",
+      "bootstrap_required": true,
+      "sync": {
+        "category": "baseline",
+        "default_mode": "copy_if_different",
+        "reason": "The low-friction task starter is baseline-managed."
+      }
+    },
+    {
+      "path": "scripts/sync-factory-baseline.ps1",
+      "bootstrap_required": true,
+      "sync": {
+        "category": "baseline",
+        "default_mode": "copy_if_different",
+        "reason": "Safe adopter sync logic is baseline-managed."
+      }
+    },
+    {
+      "path": "scripts/update-factory-task.ps1",
+      "bootstrap_required": true,
+      "sync": {
+        "category": "baseline",
+        "default_mode": "copy_if_different",
+        "reason": "Task update logic is baseline-managed."
+      }
+    },
+    {
+      "path": ".trae-local/mcp/project-fs/package.json",
+      "bootstrap_required": true,
+      "sync": {
+        "category": "baseline",
+        "default_mode": "copy_if_different",
+        "reason": "Tracked MCP dependency metadata is baseline-managed."
+      }
+    },
+    {
+      "path": ".trae-local/mcp/project-fs/package-lock.json",
+      "bootstrap_required": true,
+      "sync": {
+        "category": "baseline",
+        "default_mode": "copy_if_different",
+        "reason": "Tracked MCP dependency lockfile is baseline-managed."
+      }
+    }
+  ]
+}

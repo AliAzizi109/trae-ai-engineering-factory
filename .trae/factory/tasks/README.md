@@ -37,11 +37,14 @@
 
 ## Usage
 
+- Use `.trae/factory/config/baseline-files.manifest.json` as the authoritative baseline file list for bootstrap validation and safe adopter sync planning.
+- Use `scripts/start-factory-task.ps1` when you want one low-friction command that creates a task and immediately prints the task summary and operator status.
 - Use `scripts/new-factory-task.ps1` to create a new task file with a generated Task ID.
 - Use `scripts/update-factory-task.ps1` to safely update status fields and append findings, events, execution log items, model attempts, verification notes, and artifacts while preserving task-path, handle, and backup hardening.
 - Use `scripts/get-factory-task-summary.ps1` when you need a quick human-readable operational summary with normalized operator fields.
 - Use `scripts/get-factory-operator-status.ps1` when you need a repo-level or task-level dashboard with active/latest task selection.
 - Use `scripts/select-factory-model.ps1` before role execution when you need deterministic preferred/fallback selection.
+- Use `scripts/sync-factory-baseline.ps1` in check-only mode first when comparing this baseline against an adopter repository; it skips project-specific files by default and never deletes files.
 - Update the same task file through the workflow instead of scattering status across multiple docs.
 - Mark unfinished checks explicitly instead of implying completion.
 
