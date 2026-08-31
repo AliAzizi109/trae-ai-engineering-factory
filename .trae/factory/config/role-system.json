@@ -286,6 +286,7 @@
         "invocation_path": "chief_orchestrator -> qa_test_verifier contract -> built-in default under no-edit verification mode",
         "expected_outputs": [
           "qa_result",
+          "qa_verification",
           "verification_summary",
           "remaining gaps"
         ],
@@ -305,6 +306,7 @@
       ],
       "outputs": [
         "qa_result",
+        "qa_verification",
         "verification_summary",
         "remaining gaps"
       ],
@@ -321,7 +323,9 @@
       "success_criteria": [
         "Verification scope is explicit",
         "Untested areas are marked",
-        "QA result is evidence-based"
+        "QA result is evidence-based",
+        "Terminal PASS or FAIL includes structured qa_verification evidence",
+        "Blocking checks cannot be skipped and still produce PASS"
       ],
       "failure_behavior": "Record unverified checks as gaps and route back for fixes or human decision.",
       "escalation": "Escalate when required test evidence cannot be produced in the current environment.",

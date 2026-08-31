@@ -62,6 +62,9 @@ param(
     [string]$QaStatus,
 
     [Parameter()]
+    [string]$QaVerificationJson,
+
+    [Parameter()]
     [string[]]$AppendFinding = @(),
 
     [Parameter()]
@@ -929,6 +932,10 @@ function Assert-ValidatedTaskStateFieldValue {
             Assert-AllowedStringValue -FieldName $FieldName -Value $Value -AllowedValues $Contract.verdict
             break
         }
+        'qa_verification' {
+            Assert-QaVerificationFieldValue -FieldName $FieldName -Value $Value
+            break
+        }
         'scope' {
             Assert-StringArrayFieldValue -FieldName $FieldName -Value $Value
             break
@@ -1041,6 +1048,9 @@ function Assert-TaskStateContract {
     Assert-ValidatedTaskStateFieldValue -FieldName 'review_result' -Value $State.review_result -Contract $Contract
     Assert-ValidatedTaskStateFieldValue -FieldName 'security_result' -Value $State.security_result -Contract $Contract
     Assert-ValidatedTaskStateFieldValue -FieldName 'qa_result' -Value $State.qa_result -Contract $Contract
+    if ($State.Contains('qa_verification')) {
+        Assert-ValidatedTaskStateFieldValue -FieldName 'qa_verification' -Value $State.qa_verification -Contract $Contract
+    }
     Assert-ValidatedTaskStateFieldValue -FieldName 'task_id' -Value $State.task_id -Contract $Contract
     Assert-ValidatedTaskStateFieldValue -FieldName 'objective' -Value $State.objective -Contract $Contract
     Assert-ValidatedTaskStateFieldValue -FieldName 'scope' -Value $State.scope -Contract $Contract
@@ -1258,6 +1268,219 @@ function Get-DefaultCapabilityClassification {
     }
 }
 
+function Get-DefaultQaVerification {
+    [OutputType([hashtable])]
+    param()
+
+    return @{
+        status = 'pending'
+        verdict_reason = ''
+        verifier_role = ''
+        invocation_path = ''
+        execution_mode = ''
+        evidence_sufficiency = 'insufficient'
+        blocking_checks = @()
+        advisory_checks = @()
+        passed_checks = @()
+        failed_checks = @()
+        skipped_checks = @()
+        not_possible_checks = @()
+        commands = @()
+        artifacts = @()
+        limitations = @()
+    }
+}
+
+function Get-CanonicalUniqueStringArray {
+    [OutputType([string[]])]
+    param(
+        [Parameter()]
+        [AllowNull()]
+        [object]$Value
+    )
+
+    $items = ConvertTo-StringArray -Value $Value
+    $seen = New-Object 'System.Collections.Generic.HashSet[string]' ([System.StringComparer]::OrdinalIgnoreCase)
+    $result = New-Object System.Collections.Generic.List[string]
+
+    foreach ($item in $items) {
+        if ($seen.Add($item)) {
+            [void]$result.Add($item)
+        }
+    }
+
+    return ,($result.ToArray())
+}
+
+function Test-StringArrayContainsValue {
+    [OutputType([bool])]
+    param(
+        [Parameter()]
+        [string[]]$Values = @(),
+
+        [Parameter(Mandatory = $true)]
+        [string]$Target
+    )
+
+    foreach ($value in @($Values)) {
+        if ($value.Equals($Target, [System.StringComparison]::OrdinalIgnoreCase)) {
+            return $true
+        }
+    }
+
+    return $false
+}
+
+function Convert-ToCanonicalQaVerification {
+    [OutputType([hashtable])]
+    param(
+        [Parameter()]
+        [AllowNull()]
+        [object]$Value
+    )
+
+    $normalized = Get-DefaultQaVerification
+    if ($null -eq $Value) {
+        return $normalized
+    }
+
+    if ($Value -isnot [System.Collections.IDictionary]) {
+        throw "Field 'qa_verification' must be a JSON object."
+    }
+
+    $stringFields = @(
+        'status',
+        'verdict_reason',
+        'verifier_role',
+        'invocation_path',
+        'execution_mode',
+        'evidence_sufficiency'
+    )
+
+    foreach ($fieldName in $stringFields) {
+        if ($Value.Contains($fieldName) -and $null -ne $Value[$fieldName]) {
+            if ($Value[$fieldName] -isnot [string]) {
+                throw "Field 'qa_verification.$fieldName' must be a string."
+            }
+
+            $normalized[$fieldName] = [string]$Value[$fieldName]
+        }
+    }
+
+    $arrayFields = @(
+        'blocking_checks',
+        'advisory_checks',
+        'passed_checks',
+        'failed_checks',
+        'skipped_checks',
+        'not_possible_checks',
+        'commands',
+        'artifacts',
+        'limitations'
+    )
+
+    foreach ($fieldName in $arrayFields) {
+        if ($Value.Contains($fieldName)) {
+            $normalized[$fieldName] = Get-CanonicalUniqueStringArray -Value $Value[$fieldName]
+        }
+    }
+
+    if ([string]::IsNullOrWhiteSpace($normalized.status)) {
+        $normalized.status = 'pending'
+    }
+
+    if ([string]::IsNullOrWhiteSpace($normalized.evidence_sufficiency)) {
+        $normalized.evidence_sufficiency = 'insufficient'
+    }
+
+    return $normalized
+}
+
+function Assert-QaVerificationFieldValue {
+    [OutputType([void])]
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$FieldName,
+
+        [Parameter()]
+        [AllowNull()]
+        [object]$Value
+    )
+
+    $normalized = Convert-ToCanonicalQaVerification -Value $Value
+    Assert-AllowedStringValue -FieldName "$FieldName.status" -Value $normalized.status -AllowedValues @('pending', 'pass', 'fail')
+    Assert-StringFieldValue -FieldName "$FieldName.verdict_reason" -Value $normalized.verdict_reason
+    Assert-StringFieldValue -FieldName "$FieldName.verifier_role" -Value $normalized.verifier_role
+    Assert-StringFieldValue -FieldName "$FieldName.invocation_path" -Value $normalized.invocation_path
+    Assert-StringFieldValue -FieldName "$FieldName.execution_mode" -Value $normalized.execution_mode
+    Assert-AllowedStringValue -FieldName "$FieldName.evidence_sufficiency" -Value $normalized.evidence_sufficiency -AllowedValues @('sufficient', 'insufficient')
+
+    foreach ($arrayField in @('blocking_checks', 'advisory_checks', 'passed_checks', 'failed_checks', 'skipped_checks', 'not_possible_checks', 'commands', 'artifacts', 'limitations')) {
+        Assert-StringArrayFieldValue -FieldName "$FieldName.$arrayField" -Value $normalized[$arrayField]
+    }
+}
+
+function Assert-QaTerminalVerdictState {
+    [OutputType([void])]
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$QaResult,
+
+        [Parameter()]
+        [AllowNull()]
+        [object]$QaVerification
+    )
+
+    if ($QaResult -notin @('pass', 'fail')) {
+        return
+    }
+
+    $normalized = Convert-ToCanonicalQaVerification -Value $QaVerification
+    Assert-QaVerificationFieldValue -FieldName 'qa_verification' -Value $normalized
+
+    if ($normalized.status -ne $QaResult) {
+        throw "qa_verification.status must match qa_result when QA reaches a terminal verdict. Expected '$QaResult' but found '$($normalized.status)'."
+    }
+
+    foreach ($requiredField in @('verdict_reason', 'verifier_role', 'invocation_path', 'execution_mode')) {
+        if ([string]::IsNullOrWhiteSpace([string]$normalized[$requiredField])) {
+            throw "qa_verification.$requiredField must be recorded before qa_result can be set to '$QaResult'."
+        }
+    }
+
+    if ($QaResult -eq 'pass') {
+        if (@($normalized.blocking_checks).Count -eq 0) {
+            throw "qa_verification.blocking_checks must contain at least one executed blocking check before qa_result can be set to 'pass'."
+        }
+
+        if ($normalized.evidence_sufficiency -ne 'sufficient') {
+            throw "qa_verification.evidence_sufficiency must be 'sufficient' before qa_result can be set to 'pass'."
+        }
+
+        if (@($normalized.failed_checks).Count -gt 0) {
+            throw 'qa_verification.failed_checks must be empty before qa_result can be set to ''pass''.'
+        }
+
+        if ((@($normalized.commands).Count + @($normalized.artifacts).Count) -eq 0) {
+            throw "qa_verification.commands or qa_verification.artifacts must record at least one concrete evidence item before qa_result can be set to 'pass'."
+        }
+
+        foreach ($blockingCheck in @($normalized.blocking_checks)) {
+            if (-not (Test-StringArrayContainsValue -Values $normalized.passed_checks -Target $blockingCheck)) {
+                throw "Blocking QA check '$blockingCheck' must appear in qa_verification.passed_checks before qa_result can be set to 'pass'."
+            }
+
+            if (Test-StringArrayContainsValue -Values $normalized.skipped_checks -Target $blockingCheck) {
+                throw "Blocking QA check '$blockingCheck' cannot appear in qa_verification.skipped_checks for a PASS verdict."
+            }
+
+            if (Test-StringArrayContainsValue -Values $normalized.not_possible_checks -Target $blockingCheck) {
+                throw "Blocking QA check '$blockingCheck' cannot appear in qa_verification.not_possible_checks for a PASS verdict."
+            }
+        }
+    }
+}
+
 function Normalize-TaskState {
     [OutputType([hashtable])]
     param(
@@ -1287,6 +1510,10 @@ function Normalize-TaskState {
 
     if (-not $State.Contains('qa_result') -or [string]::IsNullOrWhiteSpace([string]$State.qa_result)) {
         $State.qa_result = 'pending'
+    }
+
+    if ($State.Contains('qa_verification') -and $State.qa_verification -is [System.Collections.IDictionary]) {
+        $State.qa_verification = Convert-ToCanonicalQaVerification -Value $State.qa_verification
     }
 
     if ($State.Contains('blocker') -and $State.blocker -isnot [string]) {
@@ -1608,6 +1835,7 @@ function Apply-JsonFieldUpdates {
         'review_result',
         'security_result',
         'qa_result',
+        'qa_verification',
         'retry_count',
         'blocker',
         'next_automatic_action',
@@ -1626,6 +1854,8 @@ function Apply-JsonFieldUpdates {
         throw 'SetFieldJson must be a JSON object.'
     }
 
+    $updatedFields = New-Object System.Collections.Generic.List[string]
+
     foreach ($entry in $requestedUpdates.GetEnumerator()) {
         $fieldName = [string]$entry.Key
         $fieldValue = $requestedUpdates[$fieldName]
@@ -1636,7 +1866,10 @@ function Apply-JsonFieldUpdates {
 
         Assert-ValidatedTaskStateFieldValue -FieldName $fieldName -Value $fieldValue -Contract $Contract
         $State[$fieldName] = $fieldValue
+        [void]$updatedFields.Add($fieldName)
     }
+
+    return ,($updatedFields.ToArray())
 }
 
 function Add-EventEntries {
@@ -1768,6 +2001,7 @@ function Test-HasRequestedChange {
         $ReviewStatus,
         $SecurityStatus,
         $QaStatus,
+        $QaVerificationJson,
         $SetFieldJson
     )
 
@@ -2465,9 +2699,13 @@ function Main {
         $previousState = ConvertTo-HashtableObject -Value $state
         $timestamp = (Get-Date).ToUniversalTime().ToString('o')
 
+        $jsonUpdatedFields = @()
         if (-not [string]::IsNullOrWhiteSpace($SetFieldJson)) {
-            Apply-JsonFieldUpdates -State $state -JsonText $SetFieldJson -Contract $contract
+            $jsonUpdatedFields = @(Apply-JsonFieldUpdates -State $state -JsonText $SetFieldJson -Contract $contract)
         }
+
+        $qaStatusUpdated = @($jsonUpdatedFields) -contains 'qa_result'
+        $qaVerificationUpdated = @($jsonUpdatedFields) -contains 'qa_verification'
 
         if (-not [string]::IsNullOrWhiteSpace($Priority)) {
             Assert-ValidatedTaskStateFieldValue -FieldName 'priority' -Value $Priority -Contract $contract
@@ -2534,6 +2772,23 @@ function Main {
     if (-not [string]::IsNullOrWhiteSpace($QaStatus)) {
         Assert-ValidatedTaskStateFieldValue -FieldName 'qa_result' -Value $QaStatus -Contract $contract
         $state.qa_result = $QaStatus
+        $qaStatusUpdated = $true
+    }
+
+    if (-not [string]::IsNullOrWhiteSpace($QaVerificationJson)) {
+        $qaVerificationState = ConvertTo-HashtableObject -Value ($QaVerificationJson | ConvertFrom-Json -ErrorAction Stop)
+        Assert-ValidatedTaskStateFieldValue -FieldName 'qa_verification' -Value $qaVerificationState -Contract $contract
+        $state.qa_verification = Convert-ToCanonicalQaVerification -Value $qaVerificationState
+        $qaVerificationUpdated = $true
+    }
+
+    if ($qaVerificationUpdated -and $state.qa_verification.status -in @('pass', 'fail') -and -not $qaStatusUpdated) {
+        $state.qa_result = [string]$state.qa_verification.status
+        $qaStatusUpdated = $true
+    }
+
+    if ($qaStatusUpdated -or $qaVerificationUpdated) {
+        Assert-QaTerminalVerdictState -QaResult ([string]$state.qa_result) -QaVerification $state.qa_verification
     }
 
     $state.findings = Add-StringEntries -Existing (Ensure-List -Value $state.findings) -Items $AppendFinding
@@ -2552,18 +2807,19 @@ function Main {
         -Role $state.current_role `
         -Model $state.current_model `
         -WasFallback $FallbackUsed
+
     $state.updated_at = $timestamp
     $state.model_attempts = Add-JsonEntries -Existing (Ensure-List -Value $state.model_attempts) -Items $AppendModelAttemptJson -DestinationField 'model_attempts'
-        $state = Normalize-TaskState -State $state
-        Add-AutomaticTransitionEntries -PreviousState $previousState -CurrentState $state -Timestamp $timestamp
-        Assert-TaskStateContract -State $state -Contract $contract
+    $state = Normalize-TaskState -State $state
+    Add-AutomaticTransitionEntries -PreviousState $previousState -CurrentState $state -Timestamp $timestamp
+    Assert-TaskStateContract -State $state -Contract $contract
 
-        Write-TaskState `
-            -Stream $taskFileStream `
-            -State $state `
-            -TaskFilePath $taskFilePath `
-            -TasksRoot $tasksRoot `
-            -PreviousContent $resolvedTaskContent
+    Write-TaskState `
+        -Stream $taskFileStream `
+        -State $state `
+        -TaskFilePath $taskFilePath `
+        -TasksRoot $tasksRoot `
+        -PreviousContent $resolvedTaskContent
     }
     finally {
         if ($null -ne $taskFileStream) {

@@ -642,6 +642,124 @@ function ConvertTo-NormalizedModelAttempts {
     return ,($normalized.ToArray())
 }
 
+function ConvertTo-NormalizedQaVerification {
+    <#
+    .SYNOPSIS
+    Normalizes structured QA verification evidence into a consistent object.
+    #>
+    [OutputType([hashtable])]
+    param(
+        [AllowNull()]
+        $Value
+    )
+
+    $normalized = [ordered]@{
+        present = $false
+        status = 'pending'
+        verdict_reason = ''
+        verifier_role = ''
+        invocation_path = ''
+        execution_mode = ''
+        evidence_sufficiency = 'insufficient'
+        blocking_checks = @()
+        advisory_checks = @()
+        passed_checks = @()
+        failed_checks = @()
+        skipped_checks = @()
+        not_possible_checks = @()
+        commands = @()
+        artifacts = @()
+        limitations = @()
+    }
+
+    if ($Value -isnot [System.Collections.IDictionary]) {
+        return $normalized
+    }
+
+    $record = [hashtable]$Value
+    $normalized.present = $true
+    $normalized.status = if ([string]::IsNullOrWhiteSpace([string](Get-ValueByAlias -Record $record -Names @('status')))) { 'pending' } else { [string](Get-ValueByAlias -Record $record -Names @('status')) }
+    $normalized.verdict_reason = [string](Get-ValueByAlias -Record $record -Names @('verdict_reason', 'verdictReason', 'reason'))
+    $normalized.verifier_role = [string](Get-ValueByAlias -Record $record -Names @('verifier_role', 'verifierRole', 'role'))
+    $normalized.invocation_path = [string](Get-ValueByAlias -Record $record -Names @('invocation_path', 'invocationPath'))
+    $normalized.execution_mode = [string](Get-ValueByAlias -Record $record -Names @('execution_mode', 'executionMode'))
+    $normalized.evidence_sufficiency = if ([string]::IsNullOrWhiteSpace([string](Get-ValueByAlias -Record $record -Names @('evidence_sufficiency', 'evidenceSufficiency')))) { 'insufficient' } else { [string](Get-ValueByAlias -Record $record -Names @('evidence_sufficiency', 'evidenceSufficiency')) }
+    $normalized.blocking_checks = ConvertTo-StringArray -Value (Get-ValueByAlias -Record $record -Names @('blocking_checks', 'blockingChecks', 'required_checks', 'requiredChecks'))
+    $normalized.advisory_checks = ConvertTo-StringArray -Value (Get-ValueByAlias -Record $record -Names @('advisory_checks', 'advisoryChecks', 'optional_checks', 'optionalChecks'))
+    $normalized.passed_checks = ConvertTo-StringArray -Value (Get-ValueByAlias -Record $record -Names @('passed_checks', 'passedChecks'))
+    $normalized.failed_checks = ConvertTo-StringArray -Value (Get-ValueByAlias -Record $record -Names @('failed_checks', 'failedChecks', 'blocking_findings', 'blockingFindings'))
+    $normalized.skipped_checks = ConvertTo-StringArray -Value (Get-ValueByAlias -Record $record -Names @('skipped_checks', 'skippedChecks'))
+    $normalized.not_possible_checks = ConvertTo-StringArray -Value (Get-ValueByAlias -Record $record -Names @('not_possible_checks', 'notPossibleChecks'))
+    $normalized.commands = ConvertTo-StringArray -Value (Get-ValueByAlias -Record $record -Names @('commands', 'executed_commands', 'executedCommands'))
+    $normalized.artifacts = ConvertTo-StringArray -Value (Get-ValueByAlias -Record $record -Names @('artifacts', 'evidence_artifacts', 'evidenceArtifacts'))
+    $normalized.limitations = ConvertTo-StringArray -Value (Get-ValueByAlias -Record $record -Names @('limitations', 'remaining_gaps', 'remainingGaps', 'gaps'))
+
+    return $normalized
+}
+
+function Get-QaQualityGate {
+    <#
+    .SYNOPSIS
+    Derives an operator-facing QA quality classification.
+    #>
+    [OutputType([string])]
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$QaStatus,
+
+        [Parameter(Mandatory = $true)]
+        [hashtable]$QaVerification
+    )
+
+    if ($QaStatus -eq 'fail') {
+        return 'fail'
+    }
+
+    if ($QaStatus -eq 'pending') {
+        return 'pending'
+    }
+
+    if (-not $QaVerification.present) {
+        return 'legacy_unstructured_pass'
+    }
+
+    if ($QaVerification.status -ne 'pass') {
+        return 'insufficient_evidence'
+    }
+
+    if ($QaVerification.evidence_sufficiency -ne 'sufficient') {
+        return 'insufficient_evidence'
+    }
+
+    if (@($QaVerification.blocking_checks).Count -eq 0) {
+        return 'insufficient_evidence'
+    }
+
+    if (@($QaVerification.failed_checks).Count -gt 0) {
+        return 'insufficient_evidence'
+    }
+
+    if ((@($QaVerification.commands).Count + @($QaVerification.artifacts).Count) -eq 0) {
+        return 'insufficient_evidence'
+    }
+
+    foreach ($blockingCheck in @($QaVerification.blocking_checks)) {
+        if ($QaVerification.passed_checks -notcontains $blockingCheck) {
+            return 'insufficient_evidence'
+        }
+
+        if ($QaVerification.skipped_checks -contains $blockingCheck) {
+            return 'insufficient_evidence'
+        }
+
+        if ($QaVerification.not_possible_checks -contains $blockingCheck) {
+            return 'insufficient_evidence'
+        }
+    }
+
+    return 'strict_pass'
+}
+
 function Normalize-TaskRecord {
     <#
     .SYNOPSIS
@@ -666,6 +784,8 @@ function Normalize-TaskRecord {
     $reviewStatus = Get-NormalizedVerdictValue -Value (Get-ValueByAlias -Record $Record -Names @('review_result', 'reviewStatus', 'review_status', 'review'))
     $securityStatus = Get-NormalizedVerdictValue -Value (Get-ValueByAlias -Record $Record -Names @('security_result', 'securityStatus', 'security_status', 'security'))
     $qaStatus = Get-NormalizedVerdictValue -Value (Get-ValueByAlias -Record $Record -Names @('qa_result', 'qaStatus', 'qa_status', 'qa', 'test_result'))
+    $qaVerification = ConvertTo-NormalizedQaVerification -Value (Get-ValueByAlias -Record $Record -Names @('qa_verification', 'qaVerification'))
+    $qaQualityGate = Get-QaQualityGate -QaStatus $qaStatus -QaVerification $qaVerification
     $approvalRequired = $status -eq 'awaiting_human_approval' -or $phase -eq 'human_approval'
     $completedGateChecks = @($reviewStatus, $securityStatus, $qaStatus | Where-Object { -not [string]::IsNullOrWhiteSpace($_) })
     $gateStatus = if (@($reviewStatus, $securityStatus, $qaStatus) -contains 'fail') {
@@ -712,6 +832,20 @@ function Normalize-TaskRecord {
         review_result = if ([string]::IsNullOrWhiteSpace($reviewStatus)) { 'pending' } else { $reviewStatus }
         security_result = if ([string]::IsNullOrWhiteSpace($securityStatus)) { 'pending' } else { $securityStatus }
         qa_result = if ([string]::IsNullOrWhiteSpace($qaStatus)) { 'pending' } else { $qaStatus }
+        qa_verification = $qaVerification
+        qa_verification_present = [bool]$qaVerification.present
+        qa_evidence_sufficiency = [string]$qaVerification.evidence_sufficiency
+        qa_invocation_path = [string]$qaVerification.invocation_path
+        qa_execution_mode = [string]$qaVerification.execution_mode
+        qa_blocking_check_count = @($qaVerification.blocking_checks).Count
+        qa_advisory_check_count = @($qaVerification.advisory_checks).Count
+        qa_passed_check_count = @($qaVerification.passed_checks).Count
+        qa_failed_check_count = @($qaVerification.failed_checks).Count
+        qa_skipped_check_count = @($qaVerification.skipped_checks).Count
+        qa_not_possible_check_count = @($qaVerification.not_possible_checks).Count
+        qa_command_count = @($qaVerification.commands).Count
+        qa_artifact_count = @($qaVerification.artifacts).Count
+        qa_quality_gate = $qaQualityGate
         retry_count = [int](Get-ValueByAlias -Record $Record -Names @('retry_count', 'retryCount', 'retries'))
         blocker = if (@($blockers).Count -gt 0) { $blockers -join '; ' } else { '' }
         blocker_state = if ($status -eq 'blocked' -or @($blockers).Count -gt 0) { 'blocked' } else { 'clear' }
@@ -771,6 +905,12 @@ function Write-TextSummary {
     Write-Host "Approval required: $($Summary.approval_required)"
     Write-Host "Gate status: $($Summary.gate_status)"
     Write-Host "Review/Security/QA: $($Summary.review_result) / $($Summary.security_result) / $($Summary.qa_result)"
+    Write-Host "QA quality gate: $($Summary.qa_quality_gate)"
+    Write-Host "QA verification present: $($Summary.qa_verification_present)"
+    Write-Host "QA evidence sufficiency: $($Summary.qa_evidence_sufficiency)"
+    Write-Host "QA path/mode: $($Summary.qa_invocation_path) / $($Summary.qa_execution_mode)"
+    Write-Host "QA checks blocking/passed/failed/skipped/not-possible: $($Summary.qa_blocking_check_count) / $($Summary.qa_passed_check_count) / $($Summary.qa_failed_check_count) / $($Summary.qa_skipped_check_count) / $($Summary.qa_not_possible_check_count)"
+    Write-Host "QA evidence commands/artifacts: $($Summary.qa_command_count) / $($Summary.qa_artifact_count)"
     Write-Host "Latest event: $latestEventSummary"
     Write-Host "Latest model attempt: $latestModelSummary"
     Write-Host "Model attempt count: $($Summary.model_attempt_count)"

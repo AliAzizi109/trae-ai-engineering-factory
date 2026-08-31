@@ -195,10 +195,11 @@
         "current_phase": "qa",
         "current_role": "qa_test_verifier",
         "qa_result": "pending",
-        "next_automatic_action": "Verify what was actually tested and record any gaps."
+        "next_automatic_action": "Verify what was actually tested, record qa_verification evidence, and disclose any gaps."
       },
       "expected_outputs": [
         "qa_result",
+        "qa_verification",
         "verification_summary",
         "remaining gaps"
       ],

@@ -232,6 +232,23 @@ function Main {
     $template.review_result = 'pending'
     $template.security_result = 'pending'
     $template.qa_result = 'pending'
+    $template.qa_verification = @{
+        status = 'pending'
+        verdict_reason = ''
+        verifier_role = ''
+        invocation_path = ''
+        execution_mode = ''
+        evidence_sufficiency = 'insufficient'
+        blocking_checks = @()
+        advisory_checks = @()
+        passed_checks = @()
+        failed_checks = @()
+        skipped_checks = @()
+        not_possible_checks = @()
+        commands = @()
+        artifacts = @()
+        limitations = @()
+    }
     $template.retry_count = 0
     $template.blocker = ''
     $template.next_automatic_action = 'Continue via the next documented handoff.'

@@ -17,6 +17,10 @@ This project is currently operated as an AI Engineering Factory.
 - Primary V4-A runtime path in this environment is:
   - `security_reviewer` -> built-in `code-reviewer`
   - `qa_test_verifier` -> built-in `default` in verification-only mode
+- `qa_test_verifier` PASS or FAIL should now be recorded with structured
+  `qa_verification` evidence in task state. A terminal QA verdict without
+  explicit checks, commands/artifacts, skipped/not-possible disclosure, and
+  verifier path metadata is treated as insufficient evidence.
 - The baseline also supports these manual fallback agents when they are
   configured through `Agent -> Create`:
   - CodeReviewer
