@@ -21,6 +21,7 @@ param(
 
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
+$script:ModelRoutingCache = $null
 
 function Initialize-HandlePathInterop {
     <#
@@ -423,6 +424,331 @@ function Read-JsonHashtable {
     }
 }
 
+function Get-ModelRouting {
+    <#
+    .SYNOPSIS
+    Loads the repository model-routing contract once per invocation.
+    #>
+    [OutputType([hashtable])]
+    param()
+
+    if ($null -ne $script:ModelRoutingCache) {
+        return $script:ModelRoutingCache
+    }
+
+    $routingPath = Join-Path -Path (Get-ProjectRoot) -ChildPath '.trae\factory\config\model-routing.json'
+    if (-not (Test-Path -LiteralPath $routingPath -PathType Leaf)) {
+        return $null
+    }
+
+    try {
+        $content = Get-Content -LiteralPath $routingPath -Raw -ErrorAction Stop
+        $script:ModelRoutingCache = [hashtable](ConvertTo-HashtableObject -Value ($content | ConvertFrom-Json -ErrorAction Stop))
+        return $script:ModelRoutingCache
+    }
+    catch {
+        Write-Warning "Unable to read model-routing.json for operator context. $($_.Exception.Message)"
+        return $null
+    }
+}
+
+function ConvertTo-UtcDateTime {
+    <#
+    .SYNOPSIS
+    Parses a timestamp string into a UTC DateTime when possible.
+    #>
+    [OutputType([Nullable[datetime]])]
+    param(
+        [AllowNull()]
+        [string]$Value
+    )
+
+    if ([string]::IsNullOrWhiteSpace($Value)) {
+        return $null
+    }
+
+    try {
+        return ([System.DateTimeOffset]::Parse(
+                $Value,
+                [System.Globalization.CultureInfo]::InvariantCulture,
+                [System.Globalization.DateTimeStyles]::AssumeUniversal)).UtcDateTime
+    }
+    catch {
+        return $null
+    }
+}
+
+function Get-DateTimeSortKey {
+    <#
+    .SYNOPSIS
+    Returns a sortable UTC tick key for a timestamp string.
+    #>
+    [OutputType([int64])]
+    param(
+        [AllowNull()]
+        [string]$Value
+    )
+
+    $parsed = ConvertTo-UtcDateTime -Value $Value
+    if ($null -eq $parsed) {
+        return [int64]0
+    }
+
+    return [int64]$parsed.Ticks
+}
+
+function Get-LatestEntrySummary {
+    <#
+    .SYNOPSIS
+    Returns the most readable summary text for an event-like entry.
+    #>
+    [OutputType([string])]
+    param(
+        [AllowNull()]
+        $Entry
+    )
+
+    if ($null -eq $Entry) {
+        return 'none'
+    }
+
+    if (-not [string]::IsNullOrWhiteSpace([string]$Entry.summary)) {
+        return [string]$Entry.summary
+    }
+
+    if (-not [string]::IsNullOrWhiteSpace([string]$Entry.message)) {
+        return [string]$Entry.message
+    }
+
+    return 'none'
+}
+
+function Get-ModelRouteDetails {
+    <#
+    .SYNOPSIS
+    Derives operator-facing route information for the current role and model.
+    #>
+    [OutputType([hashtable])]
+    param(
+        [AllowNull()]
+        [string]$Role,
+
+        [AllowNull()]
+        [string]$CurrentModel
+    )
+
+    $result = [ordered]@{
+        role_has_route = $false
+        preferred_model = ''
+        fallback_models = @()
+        current_model_route_state = if ([string]::IsNullOrWhiteSpace($CurrentModel)) { 'no_model' } else { 'untracked' }
+        next_fallback_model = ''
+        operator_summary = if ([string]::IsNullOrWhiteSpace($CurrentModel)) { 'No current model is recorded for this task.' } else { "Current model '$CurrentModel' is not mapped to a configured role route." }
+    }
+
+    if ([string]::IsNullOrWhiteSpace($Role)) {
+        return $result
+    }
+
+    $routing = Get-ModelRouting
+    if ($null -eq $routing -or $null -eq $routing.role_routes -or $null -eq $routing.role_routes[$Role]) {
+        if (-not [string]::IsNullOrWhiteSpace($CurrentModel)) {
+            $result.operator_summary = "Current model '$CurrentModel' is recorded, but role '$Role' has no configured route."
+        }
+
+        return $result
+    }
+
+    $route = [hashtable]$routing.role_routes[$Role]
+    $preferredModel = [string]$route.preferred_model
+    $fallbackModels = ConvertTo-StringArray -Value $route.fallback_models
+    $candidates = @($preferredModel) + @($fallbackModels) | Where-Object { -not [string]::IsNullOrWhiteSpace([string]$_) }
+
+    $result.role_has_route = $true
+    $result.preferred_model = $preferredModel
+    $result.fallback_models = $fallbackModels
+
+    if ([string]::IsNullOrWhiteSpace($CurrentModel)) {
+        $result.current_model_route_state = 'no_model'
+        $result.next_fallback_model = $preferredModel
+        $result.operator_summary = if ([string]::IsNullOrWhiteSpace($preferredModel)) {
+            "Role '$Role' has no preferred model configured."
+        }
+        else {
+            "No current model is recorded; role '$Role' should start on preferred model '$preferredModel'."
+        }
+
+        return $result
+    }
+
+    if ($CurrentModel -eq $preferredModel) {
+        $result.current_model_route_state = 'preferred'
+    }
+    elseif ($fallbackModels -contains $CurrentModel) {
+        $result.current_model_route_state = 'fallback'
+    }
+    else {
+        $result.current_model_route_state = 'untracked'
+    }
+
+    $currentModelIndex = [array]::IndexOf($candidates, $CurrentModel)
+    if ($currentModelIndex -ge 0 -and $currentModelIndex -lt ($candidates.Count - 1)) {
+        $result.next_fallback_model = [string]$candidates[$currentModelIndex + 1]
+    }
+
+    switch ($result.current_model_route_state) {
+        'preferred' {
+            $result.operator_summary = if ([string]::IsNullOrWhiteSpace($result.next_fallback_model)) {
+                "Role '$Role' is on preferred model '$CurrentModel'; no further fallback is configured."
+            }
+            else {
+                "Role '$Role' is on preferred model '$CurrentModel'; next fallback is '$($result.next_fallback_model)'."
+            }
+        }
+        'fallback' {
+            $result.operator_summary = if ([string]::IsNullOrWhiteSpace($result.next_fallback_model)) {
+                "Role '$Role' is using fallback model '$CurrentModel'; preferred model is '$preferredModel' and no further fallback is configured."
+            }
+            else {
+                "Role '$Role' is using fallback model '$CurrentModel'; preferred model is '$preferredModel' and next fallback is '$($result.next_fallback_model)'."
+            }
+        }
+        default {
+            $result.operator_summary = "Current model '$CurrentModel' is not part of the configured route for role '$Role'."
+        }
+    }
+
+    return $result
+}
+
+function Get-OperatorAttentionState {
+    <#
+    .SYNOPSIS
+    Derives the main operator attention state for a task.
+    #>
+    [OutputType([string])]
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$Status,
+
+        [Parameter(Mandatory = $true)]
+        [string]$BlockerState,
+
+        [Parameter(Mandatory = $true)]
+        [bool]$ApprovalRequired,
+
+        [Parameter(Mandatory = $true)]
+        [string]$GateStatus
+    )
+
+    if ($BlockerState -eq 'blocked') {
+        return 'blocked'
+    }
+
+    if ($ApprovalRequired) {
+        return 'human_approval_needed'
+    }
+
+    if ($GateStatus -eq 'failed') {
+        return 'failed_gate'
+    }
+
+    if ($Status -eq 'in_progress') {
+        return 'active_execution'
+    }
+
+    if ($Status -eq 'open') {
+        return 'queued_open'
+    }
+
+    if ($Status -eq 'completed') {
+        return 'completed'
+    }
+
+    return 'monitor'
+}
+
+function Get-PrimaryOperatorAction {
+    <#
+    .SYNOPSIS
+    Derives the clearest next human-readable action for the operator.
+    #>
+    [OutputType([string])]
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$AttentionState,
+
+        [AllowNull()]
+        [string]$NextAutomaticAction,
+
+        [AllowNull()]
+        [string]$Blocker,
+
+        [Parameter(Mandatory = $true)]
+        [string]$ReviewResult,
+
+        [Parameter(Mandatory = $true)]
+        [string]$SecurityResult,
+
+        [Parameter(Mandatory = $true)]
+        [string]$QaResult,
+
+        [AllowNull()]
+        [string]$FinalOutcome
+    )
+
+    switch ($AttentionState) {
+        'blocked' {
+            if (-not [string]::IsNullOrWhiteSpace($Blocker)) {
+                return "Resolve blocker: $Blocker"
+            }
+
+            return 'Resolve the recorded blocker before continuing.'
+        }
+        'human_approval_needed' {
+            if (-not [string]::IsNullOrWhiteSpace($NextAutomaticAction)) {
+                return "Human approval is required now. $NextAutomaticAction"
+            }
+
+            return 'Human approval is required now before the task can continue.'
+        }
+        'failed_gate' {
+            $failedChecks = @()
+            if ($ReviewResult -eq 'fail') {
+                $failedChecks += 'review'
+            }
+
+            if ($SecurityResult -eq 'fail') {
+                $failedChecks += 'security'
+            }
+
+            if ($QaResult -eq 'fail') {
+                $failedChecks += 'qa'
+            }
+
+            if ($failedChecks.Count -gt 0) {
+                return "Return the task for fixes because these gates failed: $($failedChecks -join ', ')."
+            }
+
+            return 'Investigate the failing gate before continuing.'
+        }
+        'completed' {
+            if (-not [string]::IsNullOrWhiteSpace($FinalOutcome)) {
+                return $FinalOutcome
+            }
+
+            return 'No operator action is required for this completed task.'
+        }
+        default {
+            if (-not [string]::IsNullOrWhiteSpace($NextAutomaticAction)) {
+                return $NextAutomaticAction
+            }
+
+            return 'Continue via the next documented handoff.'
+        }
+    }
+}
+
 function Get-ValueByAlias {
     <#
     .SYNOPSIS
@@ -815,6 +1141,22 @@ function Normalize-TaskRecord {
     $derivedRole = [string](Get-ValueByAlias -Record $Record -Names @('current_role', 'currentRole', 'role'))
     $derivedModel = [string](Get-ValueByAlias -Record $Record -Names @('current_model', 'currentModel', 'model'))
     $fallbackUsedValue = Get-ValueByAlias -Record $Record -Names @('fallback_used', 'fallbackUsed', 'used_fallback', 'usedFallback')
+    $createdAt = [string](Get-ValueByAlias -Record $Record -Names @('created_at', 'createdAt'))
+    $updatedAt = [string](Get-ValueByAlias -Record $Record -Names @('updated_at', 'updatedAt', 'last_updated', 'lastUpdated', 'modified_at'))
+    $latestEventTimestamp = if ($null -eq $latestEvent) { '' } else { [string]$latestEvent.timestamp }
+    $latestModelAttemptTimestamp = if ($null -eq $latestModelAttempt) { '' } else { [string]$latestModelAttempt.timestamp }
+    $createdAtSortKey = Get-DateTimeSortKey -Value $createdAt
+    $updatedAtSortKey = Get-DateTimeSortKey -Value $updatedAt
+    $latestEventSortKey = Get-DateTimeSortKey -Value $latestEventTimestamp
+    $latestModelAttemptSortKey = Get-DateTimeSortKey -Value $latestModelAttemptTimestamp
+    $recentActivitySortKey = (@([int64]$updatedAtSortKey, [int64]$latestEventSortKey, [int64]$latestModelAttemptSortKey) | Measure-Object -Maximum).Maximum
+    $modelRoute = Get-ModelRouteDetails -Role $derivedRole -CurrentModel $derivedModel
+    $blockerState = if ($status -eq 'blocked' -or @($blockers).Count -gt 0) { 'blocked' } else { 'clear' }
+    $attentionState = Get-OperatorAttentionState -Status $status -BlockerState $blockerState -ApprovalRequired $approvalRequired -GateStatus $gateStatus
+    $nextAutomaticAction = [string](Get-ValueByAlias -Record $Record -Names @('next_automatic_action', 'nextAutomaticAction', 'next_step', 'nextStep'))
+    $primaryOperatorAction = Get-PrimaryOperatorAction -AttentionState $attentionState -NextAutomaticAction $nextAutomaticAction -Blocker $(if (@($blockers).Count -gt 0) { $blockers -join '; ' } else { '' }) -ReviewResult $(if ([string]::IsNullOrWhiteSpace($reviewStatus)) { 'pending' } else { $reviewStatus }) -SecurityResult $(if ([string]::IsNullOrWhiteSpace($securityStatus)) { 'pending' } else { $securityStatus }) -QaResult $(if ([string]::IsNullOrWhiteSpace($qaStatus)) { 'pending' } else { $qaStatus }) -FinalOutcome ([string](Get-ValueByAlias -Record $Record -Names @('final_outcome', 'finalOutcome', 'outcome')))
+    $latestEventSummary = Get-LatestEntrySummary -Entry $latestEvent
+    $latestModelSummary = if ($null -ne $latestModelAttempt) { "{0} ({1})" -f $latestModelAttempt.model, $latestModelAttempt.outcome } else { 'none' }
 
     return [ordered]@{
         task_path = $TaskPath
@@ -830,8 +1172,10 @@ function Normalize-TaskRecord {
         current_model = $derivedModel
         fallback_used = if ($null -eq $fallbackUsedValue) { $false } else { [bool]$fallbackUsedValue }
         status = $status
-        created_at = [string](Get-ValueByAlias -Record $Record -Names @('created_at', 'createdAt'))
-        updated_at = [string](Get-ValueByAlias -Record $Record -Names @('updated_at', 'updatedAt', 'last_updated', 'lastUpdated', 'modified_at'))
+        created_at = $createdAt
+        created_at_sort_key = $createdAtSortKey
+        updated_at = $updatedAt
+        updated_at_sort_key = $updatedAtSortKey
         findings = ConvertTo-StringArray -Value (Get-ValueByAlias -Record $Record -Names @('findings', 'notes'))
         remaining_work = ConvertTo-StringArray -Value (Get-ValueByAlias -Record $Record -Names @('remaining_work', 'remainingWork', 'next_steps', 'remaining'))
         evidence = ConvertTo-StringArray -Value (Get-ValueByAlias -Record $Record -Names @('evidence', 'artifacts', 'links'))
@@ -854,17 +1198,30 @@ function Normalize-TaskRecord {
         qa_quality_gate = $qaQualityGate
         retry_count = [int](Get-ValueByAlias -Record $Record -Names @('retry_count', 'retryCount', 'retries'))
         blocker = if (@($blockers).Count -gt 0) { $blockers -join '; ' } else { '' }
-        blocker_state = if ($status -eq 'blocked' -or @($blockers).Count -gt 0) { 'blocked' } else { 'clear' }
-        next_automatic_action = [string](Get-ValueByAlias -Record $Record -Names @('next_automatic_action', 'nextAutomaticAction', 'next_step', 'nextStep'))
+        blocker_state = $blockerState
+        next_automatic_action = $nextAutomaticAction
+        operator_attention_state = $attentionState
+        primary_operator_action = $primaryOperatorAction
         escalation_reason = [string](Get-ValueByAlias -Record $Record -Names @('escalation_reason', 'escalationReason'))
         verification_summary = [string](Get-ValueByAlias -Record $Record -Names @('verification_summary', 'verificationSummary', 'verification'))
         final_outcome = [string](Get-ValueByAlias -Record $Record -Names @('final_outcome', 'finalOutcome', 'outcome'))
         execution_log = $executionLog
         events = $events
         latest_event = $latestEvent
+        latest_event_summary = $latestEventSummary
+        latest_event_timestamp = $latestEventTimestamp
+        latest_event_sort_key = $latestEventSortKey
         model_attempts = $modelAttempts
         latest_model_attempt = $latestModelAttempt
+        latest_model_attempt_summary = $latestModelSummary
+        latest_model_attempt_sort_key = $latestModelAttemptSortKey
         model_attempt_count = @($modelAttempts).Count
+        recent_activity_sort_key = $recentActivitySortKey
+        preferred_model_for_role = [string]$modelRoute.preferred_model
+        fallback_models_for_role = @($modelRoute.fallback_models)
+        current_model_route_state = [string]$modelRoute.current_model_route_state
+        next_fallback_model = [string]$modelRoute.next_fallback_model
+        model_route_summary = [string]$modelRoute.operator_summary
         capability_classification = Get-ValueByAlias -Record $Record -Names @('capability_classification', 'capabilityClassification')
         approval_required = $approvalRequired
         gate_status = $gateStatus
@@ -882,34 +1239,21 @@ function Write-TextSummary {
         [hashtable]$Summary
     )
 
-    $latestEventSummary = if ($null -ne $Summary.latest_event) {
-        if (-not [string]::IsNullOrWhiteSpace([string]$Summary.latest_event.summary)) {
-            [string]$Summary.latest_event.summary
-        }
-        else {
-            [string]$Summary.latest_event.message
-        }
-    }
-    else {
-        'none'
-    }
-
-    $latestModelSummary = if ($null -ne $Summary.latest_model_attempt) {
-        "{0} ({1})" -f $Summary.latest_model_attempt.model, $Summary.latest_model_attempt.outcome
-    }
-    else {
-        'none'
-    }
-
     Write-Host "Task ID: $($Summary.task_id)"
     Write-Host "Objective: $($Summary.objective)"
     Write-Host "Status: $($Summary.status)"
+    Write-Host "Operator attention state: $($Summary.operator_attention_state)"
+    Write-Host "Primary operator action: $($Summary.primary_operator_action)"
     Write-Host "Current phase: $($Summary.current_phase)"
     Write-Host "Current role: $($Summary.current_role)"
     Write-Host "Current model: $($Summary.current_model)"
+    Write-Host "Model route: $($Summary.model_route_summary)"
+    Write-Host "Model route state: $($Summary.current_model_route_state)"
+    Write-Host "Preferred/next fallback model: $($Summary.preferred_model_for_role) / $($Summary.next_fallback_model)"
     Write-Host "Fallback used: $($Summary.fallback_used)"
     Write-Host "Approval required: $($Summary.approval_required)"
     Write-Host "Gate status: $($Summary.gate_status)"
+    Write-Host "Updated at: $($Summary.updated_at)"
     Write-Host "Review/Security/QA: $($Summary.review_result) / $($Summary.security_result) / $($Summary.qa_result)"
     Write-Host "QA quality gate: $($Summary.qa_quality_gate)"
     Write-Host "QA verification present: $($Summary.qa_verification_present)"
@@ -917,8 +1261,8 @@ function Write-TextSummary {
     Write-Host "QA path/mode: $($Summary.qa_invocation_path) / $($Summary.qa_execution_mode)"
     Write-Host "QA checks blocking/passed/failed/skipped/not-possible: $($Summary.qa_blocking_check_count) / $($Summary.qa_passed_check_count) / $($Summary.qa_failed_check_count) / $($Summary.qa_skipped_check_count) / $($Summary.qa_not_possible_check_count)"
     Write-Host "QA evidence commands/artifacts: $($Summary.qa_command_count) / $($Summary.qa_artifact_count)"
-    Write-Host "Latest event: $latestEventSummary"
-    Write-Host "Latest model attempt: $latestModelSummary"
+    Write-Host "Latest event: $($Summary.latest_event_summary)"
+    Write-Host "Latest model attempt: $($Summary.latest_model_attempt_summary)"
     Write-Host "Model attempt count: $($Summary.model_attempt_count)"
     Write-Host "Blocker state: $($Summary.blocker_state)"
     Write-Host "Blocker: $($Summary.blocker)"
